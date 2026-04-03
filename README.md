@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="Pry" width="300">
+</p>
+
 # Pry
 
 Proxy CLI para iOS devs. Swift puro, sin dependencias externas. Intercepta, mockea y observa tráfico HTTP/HTTPS desde la terminal.
