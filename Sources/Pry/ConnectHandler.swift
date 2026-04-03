@@ -279,7 +279,8 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
 
     private func handleDecryptedRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?) {
         let logEntry = "\(head.method) https://\(host)\(head.uri)"
-        print(request(">>> \(logEntry)"))
+        BodyPrinter.printRequestHead(head, host: host, port: port)
+        BodyPrinter.printRequestBody(body)
         Config.appendLog(logEntry)
 
         // Check mocks — supports both "domain:path" and simple "/path" formats
@@ -295,7 +296,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                 matches = head.uri.hasPrefix(mockKey)
             }
             if matches {
-                print(mock("<<< MOCK \(head.uri) (200 OK)"))
+                BodyPrinter.printMock(path: head.uri, json: response)
                 Config.appendLog("MOCK \(head.uri) -> 200 OK")
                 var headers = HTTPHeaders()
                 headers.add(name: "Content-Type", value: "application/json")
@@ -352,6 +353,8 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
 
     private let clientChannel: Channel
     private let host: String
+    private var contentType: String?
+    private var responseBody: ByteBuffer?
 
     init(clientChannel: Channel, host: String) {
         self.clientChannel = clientChannel
@@ -362,14 +365,19 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
         let part = unwrapInboundIn(data)
         switch part {
         case .head(let head):
-            let statusColor = head.status.code < 400 ? response("<<< \(head.status.code)") : errText("<<< \(head.status.code)")
-            print("\(statusColor) https://\(host)")
+            BodyPrinter.printResponseHead(head, host: host, https: true)
             Config.appendLog("RESPONSE https://\(host) -> \(head.status.code)")
-            let serverHead = HTTPResponseHead(version: head.version, status: head.status, headers: head.headers)
+            contentType = head.headers["Content-Type"].first
+            responseBody = context.channel.allocator.buffer(capacity: 0)
+            let serverHead = NIOHTTP1.HTTPResponseHead(version: head.version, status: head.status, headers: head.headers)
             clientChannel.write(NIOAny(HTTPServerResponsePart.head(serverHead)), promise: nil)
-        case .body(let buffer):
+        case .body(var buffer):
+            responseBody?.writeBuffer(&buffer)
             clientChannel.write(NIOAny(HTTPServerResponsePart.body(.byteBuffer(buffer))), promise: nil)
         case .end(let trailers):
+            if let body = responseBody {
+                BodyPrinter.printResponseBody(body, contentType: contentType)
+            }
             clientChannel.writeAndFlush(NIOAny(HTTPServerResponsePart.end(trailers))).whenComplete { _ in
                 self.clientChannel.close(promise: nil)
             }
