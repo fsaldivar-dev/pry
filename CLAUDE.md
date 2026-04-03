@@ -104,6 +104,6 @@ curl -x http://localhost:8080 http://httpbin.org/get
 
 ## Limitaciones conocidas
 
-- HTTPS tunneling WIP: GlueHandler bytes no fluyen despues de CONNECT 200
-- TLS interception WIP: cert generation funciona, handshake no completa
+- Certificate pinning: apps que pinean certificados fallan con TLS interception — necesitan ser excluidas de la watchlist
 - Solo macOS y Linux (Swift en Windows es experimental)
+- NIOAny deprecated warnings en SwiftNIO 2.97 — funcional pero pendiente de actualizar
