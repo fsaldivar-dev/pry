@@ -127,7 +127,7 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
 
     private func connectFailed(error: Error, context: ChannelHandlerContext) {
-        print("!!! CONNECT failed: \(error)")
+        print(errText("!!! CONNECT failed: \(error)"))
         state = .upgradeFailed
         let headers = HTTPHeaders([("Content-Length", "0"), ("Connection", "close")])
         let head = HTTPResponseHead(version: .init(major: 1, minor: 1), status: .badGateway, headers: headers)
@@ -155,7 +155,7 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
 
     private func setupTunnel(peerChannel: Channel, context: ChannelHandlerContext) {
-        print("--- TUNNEL \(connectHost) (passthrough)")
+        print(tunnel("--- TUNNEL \(connectHost) (passthrough)"))
         Config.appendLog("TUNNEL \(connectHost)")
 
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
@@ -169,7 +169,7 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
             // Remove self last — this forwards any pending bytes via removeHandler()
             context.pipeline.syncOperations.removeHandler(self, promise: nil)
         } catch {
-            print("!!! Tunnel setup failed for \(connectHost): \(error)")
+            print(errText("!!! Tunnel setup failed for \(connectHost): \(error)"))
             peerChannel.close(mode: .all, promise: nil)
             context.close(promise: nil)
         }
@@ -183,7 +183,7 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
             return
         }
 
-        print(">>> INTERCEPT \(host)")
+        print(info(">>> INTERCEPT \(host)"))
         Config.appendLog("INTERCEPT \(host)")
 
         // Close raw remote channel — we'll make a TLS one later
@@ -211,11 +211,11 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
             }.flatMap {
                 context.pipeline.removeHandler(self)
             }.whenFailure { error in
-                print("!!! TLS setup failed for \(host): \(error)")
+                print(errText("!!! TLS setup failed for \(host): \(error)"))
                 context.close(promise: nil)
             }
         } catch {
-            print("!!! Cert generation failed for \(host): \(error)")
+            print(errText("!!! Cert generation failed for \(host): \(error)"))
             context.close(promise: nil)
         }
     }
@@ -279,7 +279,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
 
     private func handleDecryptedRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?) {
         let logEntry = "\(head.method) https://\(host)\(head.uri)"
-        print(">>> \(logEntry)")
+        print(request(">>> \(logEntry)"))
         Config.appendLog(logEntry)
 
         // Check mocks — supports both "domain:path" and simple "/path" formats
@@ -295,7 +295,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                 matches = head.uri.hasPrefix(mockKey)
             }
             if matches {
-                print("<<< MOCK \(head.uri) (200 OK)")
+                print(mock("<<< MOCK \(head.uri) (200 OK)"))
                 Config.appendLog("MOCK \(head.uri) -> 200 OK")
                 var headers = HTTPHeaders()
                 headers.add(name: "Content-Type", value: "application/json")
@@ -336,12 +336,12 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                         }
                         remoteChannel.writeAndFlush(NIOAny(HTTPClientRequestPart.end(nil)), promise: nil)
                     case .failure(let error):
-                        print("!!! TLS forward failed to \(self.host): \(error)")
+                        print(errText("!!! TLS forward failed to \(self.host): \(error)"))
                         context.close(promise: nil)
                     }
                 }
         } catch {
-            print("!!! TLS context failed: \(error)")
+            print(errText("!!! TLS context failed: \(error)"))
             context.close(promise: nil)
         }
     }
@@ -362,7 +362,8 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
         let part = unwrapInboundIn(data)
         switch part {
         case .head(let head):
-            print("<<< \(head.status.code) https://\(host)")
+            let statusColor = head.status.code < 400 ? response("<<< \(head.status.code)") : errText("<<< \(head.status.code)")
+            print("\(statusColor) https://\(host)")
             Config.appendLog("RESPONSE https://\(host) -> \(head.status.code)")
             let serverHead = HTTPResponseHead(version: head.version, status: head.status, headers: head.headers)
             clientChannel.write(NIOAny(HTTPServerResponsePart.head(serverHead)), promise: nil)
@@ -377,7 +378,7 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        print("!!! TLS response error from \(host): \(error)")
+        print(errText("!!! TLS response error from \(host): \(error)"))
         clientChannel.close(promise: nil)
         context.close(promise: nil)
     }
