@@ -86,3 +86,83 @@ CI/CD, branch protection, documentación como libro técnico.
 **Problema encontrado:**
 - `swift test` falla si no hay test target → quitado del CI por ahora
 - Tests requieren separar en library + executable target (PryLib + Pry) → pendiente para cuando haya tests reales
+
+---
+
+### Los bytes no fluyen — la cacería del bug HTTPS
+
+Llevábamos 4 implementaciones de GlueHandler. Todas compilaban. Ninguna funcionaba. El CONNECT 200 se enviaba perfecto — curl lo veía, establecía el túnel — pero después: silencio. Los bytes TLS del ClientHello entraban al proxy y desaparecían. Sin error, sin crash, sin log. Nada.
+
+Probamos de todo:
+- GlueHandler con `matchedPair()` y `partnerContext` → silencio
+- GlueHandler simplificado con `peerChannel` directo → silencio
+- Forzar `autoRead = true` en ambos canales → silencio
+- Copiar exacto el GlueHandler de Apple → silencio
+
+El GlueHandler no era el problema. Los bytes nunca llegaban a él.
+
+### La investigación
+
+Buscamos en Swift Forums, GitHub issues de swift-nio, y clonamos el connect-proxy de Apple para comparar línea por línea. La comparación fue brutal — nuestro ConnectHandler se veía casi idéntico al de Apple. Casi.
+
+El de Apple tenía esta transición:
+```swift
+case .beganConnecting:
+    if case .end = self.unwrapInboundIn(data) {
+        self.upgradeState = .awaitingConnection(pendingBytes: [])
+        self.removeDecoder(context: context)  // ← esto
+    }
+```
+
+El nuestro:
+```swift
+case .beganConnecting:
+    if case .end = unwrapInboundIn(data) {
+        // No hacía nada — un comentario diciendo "esto no debería pasar"
+    }
+```
+
+### Por qué importa
+
+Cuando curl envía `CONNECT google.com:443`, el proxy recibe `.head` (el CONNECT) y luego `.end`. En paralelo, el proxy abre una conexión TCP a google.com. Hay una race condition: ¿qué llega primero, el `.end` del request HTTP o la confirmación de la conexión TCP?
+
+En redes rápidas — localhost, LAN, cualquier servidor cercano — el `.end` llega primero. Siempre. Y nuestro código no hacía nada cuando eso pasaba. El `ByteToMessageHandler<HTTPRequestDecoder>` seguía en el pipeline, esperando más HTTP. Cuando los bytes TLS llegaban, el decoder los miraba, no entendía qué eran, y los descartaba. Sin error. Sin crash. Solo silencio.
+
+Un `if` vacío. Eso era todo el bug.
+
+### El segundo problema
+
+Teníamos `host`, `port` e `intercept` almacenados dentro del enum de estado: `.awaitingEnd(host: String, port: Int, intercept: Bool)`. Pero `.beganConnecting` no tenía esos valores. Así que aunque supiéramos que faltaba la transición, no podíamos hacerla sin refactorizar.
+
+Solución: sacar `host`, `port`, `intercept` del enum y guardarlos como propiedades de instancia. Simple. Debimos haberlo hecho desde el principio.
+
+### El tercer detalle
+
+Un `try?` silencioso al remover HTTPInterceptor del pipeline. Si fallaba (y podía fallar), el handler seguía ahí. Los bytes TLS entraban al HTTPInterceptor que intentaba parsearlos como HTTP. Más corrupción silenciosa.
+
+### El momento
+
+```bash
+curl -s -o /dev/null -w "Status: %{http_code}" -x http://localhost:8080 https://www.google.com
+Status: 200
+```
+
+Después de 4 implementaciones de GlueHandler, 6 pruebas fallidas, y una comparación línea por línea con el ejemplo de Apple — Google cargó a través de nuestro proxy. El túnel funcionaba.
+
+```bash
+curl -sk -x http://localhost:8080 https://httpbin.org/get
+{"args":{},"headers":{"Accept":"*/*","Host":"httpbin.org"...}
+```
+
+Y la interceptación TLS también. El JSON de httpbin descifrado, pasando por nuestro CA cert, a través de un proxy que escribimos desde cero.
+
+### Qué aprendimos
+
+Las race conditions en SwiftNIO no crashean. No tiran errores. Los bytes simplemente desaparecen. La state machine necesita cubrir TODAS las combinaciones de orden de llegada, no solo las que "deberían pasar".
+
+Y a veces el bug es un `if` vacío con un comentario que dice "esto no debería pasar". Siempre pasa.
+
+**Fuentes que nos ayudaron:**
+- [apple/swift-nio-examples/connect-proxy](https://github.com/apple/swift-nio-examples/tree/main/connect-proxy)
+- [Swift Forums: HTTPRequestDecoder does not forward request](https://forums.swift.org/t/httprequestdecoder-does-not-forward-request/71484)
+- [Swift Forums: Adding and removing handlers](https://forums.swift.org/t/adding-and-removing-handlers/54915)
