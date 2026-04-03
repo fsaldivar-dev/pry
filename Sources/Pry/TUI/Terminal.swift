@@ -21,16 +21,21 @@ class Terminal {
         var raw = originalTermios
 
         // Input: disable break, CR->NL, parity, strip, XON/XOFF
+        #if canImport(Darwin)
         raw.c_iflag &= ~UInt(BRKINT | ICRNL | INPCK | ISTRIP | IXON)
-        // Output: disable post-processing
         raw.c_oflag &= ~UInt(OPOST)
-        // Control: 8-bit chars
         raw.c_cflag |= UInt(CS8)
-        // Local: disable echo, canonical, extended, signals
         raw.c_lflag &= ~UInt(ECHO | ICANON | IEXTEN | ISIG)
-        // Read timeout: return after 100ms even with no input
         raw.c_cc.16 = 0  // VMIN
         raw.c_cc.17 = 1  // VTIME (100ms)
+        #else
+        raw.c_iflag &= ~UInt32(BRKINT | ICRNL | INPCK | ISTRIP | IXON)
+        raw.c_oflag &= ~UInt32(OPOST)
+        raw.c_cflag |= UInt32(CS8)
+        raw.c_lflag &= ~UInt32(ECHO | ICANON | IEXTEN | ISIG)
+        raw.c_cc.6 = 0   // VMIN (Linux index)
+        raw.c_cc.5 = 1   // VTIME (Linux index)
+        #endif
 
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
         isRawMode = true

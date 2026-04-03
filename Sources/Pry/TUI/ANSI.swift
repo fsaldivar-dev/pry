@@ -59,7 +59,11 @@ enum ANSI {
     // Terminal size
     static func getSize() -> (rows: Int, cols: Int) {
         var size = winsize()
+        #if canImport(Darwin)
         ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &size)
+        #else
+        ioctl(STDOUT_FILENO, UInt(0x5413), &size) // TIOCGWINSZ on Linux
+        #endif
         return (Int(size.ws_row), Int(size.ws_col))
     }
 
