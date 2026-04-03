@@ -8,11 +8,9 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
 
     private var requestHead: HTTPRequestHead?
     private var bodyBuffer: ByteBuffer?
-    private let mocks: [String: String]
     private let filter: String?
 
-    init(mocks: [String: String] = [:], filter: String? = nil) {
-        self.mocks = mocks
+    init(filter: String? = nil) {
         self.filter = filter
     }
 
@@ -60,6 +58,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
     }
 
     private func findMock(for path: String) -> String? {
+        let mocks = Config.loadMocks()
         for (mockPath, response) in mocks {
             if path.hasPrefix(mockPath) {
                 return response

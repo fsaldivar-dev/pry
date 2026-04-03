@@ -22,9 +22,9 @@ final class ProxyServer {
     }
 
     func start() throws {
-        let mocks = Config.loadMocks()
         let filter = Config.get("filter")
         let watchlist = Watchlist.load()
+        let mocks = Config.loadMocks()
         let ca = self.ca
 
         let bootstrap = ServerBootstrap(group: group)
@@ -32,14 +32,12 @@ final class ProxyServer {
             .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
             .childChannelInitializer { channel in
                 channel.eventLoop.makeCompletedFuture {
-                    // forwardBytes is CRITICAL: after CONNECT 200, leftover TLS bytes
-                    // must be forwarded as raw bytes, not parsed as HTTP
                     try channel.pipeline.syncOperations.addHandler(
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes))
                     )
                     try channel.pipeline.syncOperations.addHandler(HTTPResponseEncoder())
                     try channel.pipeline.syncOperations.addHandler(ConnectHandler(ca: ca))
-                    try channel.pipeline.syncOperations.addHandler(HTTPInterceptor(mocks: mocks, filter: filter))
+                    try channel.pipeline.syncOperations.addHandler(HTTPInterceptor(filter: filter))
                 }
             }
             .childChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
@@ -52,7 +50,6 @@ final class ProxyServer {
         let pid = ProcessInfo.processInfo.processIdentifier
         try? "\(pid)".write(toFile: Config.pidFile, atomically: true, encoding: .utf8)
 
-        let mockCount = mocks.count
         print("🐱 Pry listening on :\(port)")
         if ca != nil {
             print("   HTTPS interception: enabled")
@@ -62,9 +59,10 @@ final class ProxyServer {
         } else {
             print("   No domains in watchlist (HTTPS passthrough)")
         }
-        if mockCount > 0 {
-            print("   \(mockCount) mock(s) loaded")
+        if !mocks.isEmpty {
+            print("   \(mocks.count) mock(s) loaded")
         }
+        print("   Mocks reload on every request (add anytime)")
         if let filter = filter {
             print("   Filtering: \(filter)")
         }
