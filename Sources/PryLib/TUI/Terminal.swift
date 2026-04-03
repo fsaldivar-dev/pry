@@ -5,14 +5,14 @@ import Darwin
 import Glibc
 #endif
 
-enum KeyEvent {
+public enum KeyEvent {
     case char(Character)
     case up, down, left, right
     case enter, backspace, delete, tab
     case ctrlC, ctrlD, escape
 }
 
-class Terminal {
+public class Terminal {
     private var originalTermios = termios()
     private(set) var isRawMode = false
 

@@ -1,21 +1,27 @@
 import Foundation
 import NIOHTTP1
 
-struct AppIdentifier {
-    struct AppInfo {
-        let icon: String
-        let name: String
-        let version: String?
+public struct AppIdentifier {
+    public struct AppInfo {
+        public let icon: String
+        public let name: String
+        public let version: String?
     }
 
-    static func identify(from headers: HTTPHeaders) -> AppInfo {
+    public static func identify(from headers: HTTPHeaders) -> AppInfo {
         guard let ua = headers["User-Agent"].first else {
             return AppInfo(icon: "❓", name: "Unknown", version: nil)
         }
         return parse(userAgent: ua)
     }
 
-    static func parse(userAgent ua: String) -> AppInfo {
+    public static func parse(userAgent ua: String) -> AppInfo {
+        // Chrome (check before Safari — Chrome UA contains "Safari/")
+        if ua.contains("Chrome/") && !ua.contains("Chromium/") {
+            let version = extractVersion(from: ua, after: "Chrome/")
+            return AppInfo(icon: "🌐", name: "Chrome", version: version)
+        }
+
         // Safari on iOS
         if ua.contains("Safari/") && ua.contains("Mobile/") && ua.contains("iPhone") {
             let version = extractVersion(from: ua, after: "Version/")
@@ -26,12 +32,6 @@ struct AppIdentifier {
         if ua.contains("Safari/") && ua.contains("Macintosh") {
             let version = extractVersion(from: ua, after: "Version/")
             return AppInfo(icon: "🧭", name: "Safari macOS", version: version)
-        }
-
-        // Chrome
-        if ua.contains("Chrome/") {
-            let version = extractVersion(from: ua, after: "Chrome/")
-            return AppInfo(icon: "🌐", name: "Chrome", version: version)
         }
 
         // Firefox
@@ -86,7 +86,7 @@ struct AppIdentifier {
         return AppInfo(icon: "❓", name: String(ua.prefix(20)), version: nil)
     }
 
-    static func label(from headers: HTTPHeaders) -> String {
+    public static func label(from headers: HTTPHeaders) -> String {
         let app = identify(from: headers)
         let ver = app.version.map { "/\($0)" } ?? ""
         return "\(app.icon) \(app.name)\(ver)"

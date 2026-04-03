@@ -1,9 +1,9 @@
 import Foundation
 
-struct Watchlist {
-    static let watchFile = ".prywatch"
+public struct Watchlist {
+    public static let watchFile = ".prywatch"
 
-    static func load() -> Set<String> {
+    public static func load() -> Set<String> {
         var domains = Set<String>()
 
         // From .prywatch file
@@ -19,13 +19,13 @@ struct Watchlist {
         return domains
     }
 
-    static func add(_ domain: String) {
+    public static func add(_ domain: String) {
         var domains = load()
         domains.insert(domain.lowercased())
         save(domains)
     }
 
-    static func addFromFile(_ path: String) throws {
+    public static func addFromFile(_ path: String) throws {
         guard let content = try? String(contentsOfFile: path, encoding: .utf8) else {
             throw ProxyError.mockFileNotFound(path)
         }
@@ -39,13 +39,13 @@ struct Watchlist {
         save(domains)
     }
 
-    static func remove(_ domain: String) {
+    public static func remove(_ domain: String) {
         var domains = load()
         domains.remove(domain.lowercased())
         save(domains)
     }
 
-    static func matches(_ host: String) -> Bool {
+    public static func matches(_ host: String) -> Bool {
         let domains = load()
         let lowerHost = host.lowercased()
         for domain in domains {
