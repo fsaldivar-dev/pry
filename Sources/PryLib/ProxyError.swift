@@ -1,6 +1,6 @@
 import Foundation
 
-enum ProxyError: Error, CustomStringConvertible {
+public enum ProxyError: Error, CustomStringConvertible {
     case alreadyRunning
     case notRunning
     case invalidPort(String)

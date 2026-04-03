@@ -5,7 +5,7 @@ import Darwin
 import Glibc
 #endif
 
-class TUI {
+public class TUI {
     private let terminal = Terminal()
     private let broker = OutputBroker.shared
     private let store = RequestStore.shared
@@ -31,13 +31,13 @@ class TUI {
     // Dirty flag from store updates
     private var storeChanged = false
 
-    var onCommand: ((String) -> Void)?
+    public var onCommand: ((String) -> Void)?
 
-    init(port: Int) {
+    public init(port: Int) {
         self.port = port
     }
 
-    func start() {
+    public func start() {
         let size = ANSI.getSize()
         rows = size.rows
         cols = size.cols
@@ -64,7 +64,7 @@ class TUI {
         cleanup()
     }
 
-    func stop() { running = false }
+    public func stop() { running = false }
 
     private func cleanup() {
         broker.setHeadlessMode()

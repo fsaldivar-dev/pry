@@ -1,29 +1,37 @@
 import Foundation
 
 /// Stores captured requests for TUI navigation
-class RequestStore {
-    static let shared = RequestStore()
+public class RequestStore {
+    public static let shared = RequestStore()
 
     private let queue = DispatchQueue(label: "pry.requeststore")
     private var entries: [CapturedRequest] = []
     private let maxEntries = 500
     var onChange: (() -> Void)?
 
-    struct CapturedRequest {
-        let id: Int
-        let timestamp: Date
-        let method: String
-        let url: String
-        let host: String
-        let appIcon: String
-        let appName: String
-        var requestHeaders: [(String, String)] = []
-        var requestBody: String?
-        var statusCode: UInt?
-        var responseHeaders: [(String, String)] = []
-        var responseBody: String?
-        var isMock: Bool = false
-        var isTunnel: Bool = false
+    public struct CapturedRequest {
+        public let id: Int
+        public let timestamp: Date
+        public let method: String
+        public let url: String
+        public let host: String
+        public let appIcon: String
+        public let appName: String
+        public var requestHeaders: [(String, String)] = []
+        public var requestBody: String?
+        public var statusCode: UInt?
+        public var responseHeaders: [(String, String)] = []
+        public var responseBody: String?
+        public var isMock: Bool = false
+        public var isTunnel: Bool = false
+
+        public init(id: Int = 0, timestamp: Date = Date(), method: String, url: String, host: String, appIcon: String, appName: String, requestHeaders: [(String, String)] = [], requestBody: String? = nil, statusCode: UInt? = nil, responseHeaders: [(String, String)] = [], responseBody: String? = nil, isMock: Bool = false, isTunnel: Bool = false) {
+            self.id = id; self.timestamp = timestamp; self.method = method; self.url = url
+            self.host = host; self.appIcon = appIcon; self.appName = appName
+            self.requestHeaders = requestHeaders; self.requestBody = requestBody
+            self.statusCode = statusCode; self.responseHeaders = responseHeaders
+            self.responseBody = responseBody; self.isMock = isMock; self.isTunnel = isTunnel
+        }
     }
 
     private var nextId = 1
@@ -101,5 +109,35 @@ class RequestStore {
     func clear() {
         queue.sync { entries.removeAll() }
         onChange?()
+    }
+
+    // MARK: - Filter & Search
+
+    func filter(method: String) -> [CapturedRequest] {
+        queue.sync {
+            entries.filter { $0.method.uppercased() == method.uppercased() }
+        }
+    }
+
+    func filter(statusRange: ClosedRange<UInt>) -> [CapturedRequest] {
+        queue.sync {
+            entries.filter { req in
+                guard let code = req.statusCode else { return false }
+                return statusRange.contains(code)
+            }
+        }
+    }
+
+    func search(_ text: String) -> [CapturedRequest] {
+        let lower = text.lowercased()
+        return queue.sync {
+            entries.filter { req in
+                req.url.lowercased().contains(lower) ||
+                req.host.lowercased().contains(lower) ||
+                req.method.lowercased().contains(lower) ||
+                (req.responseBody?.lowercased().contains(lower) ?? false) ||
+                (req.requestBody?.lowercased().contains(lower) ?? false)
+            }
+        }
     }
 }

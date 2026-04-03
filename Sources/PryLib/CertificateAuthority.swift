@@ -4,16 +4,16 @@ import SwiftASN1
 import Crypto
 import NIOSSL
 
-final class CertificateAuthority {
-    static let caDir = NSHomeDirectory() + "/.pry/ca"
-    static let caCertPath = caDir + "/pry-ca.pem"
-    static let caKeyPath = caDir + "/pry-ca-key.pem"
+public final class CertificateAuthority {
+    public static let caDir = NSHomeDirectory() + "/.pry/ca"
+    public static let caCertPath = caDir + "/pry-ca.pem"
+    public static let caKeyPath = caDir + "/pry-ca-key.pem"
 
     private let caKey: P256.Signing.PrivateKey
     private let caCertificate: Certificate
     private var certCache: [String: (NIOSSLCertificate, NIOSSLPrivateKey)] = [:]
 
-    init() throws {
+    public init() throws {
         // Create dir if needed
         try FileManager.default.createDirectory(atPath: Self.caDir, withIntermediateDirectories: true)
 
@@ -103,7 +103,7 @@ final class CertificateAuthority {
         return (nioSSLCert, nioSSLKey)
     }
 
-    func printInfo() {
+    public func printInfo() {
         print("CA Certificate: \(Self.caCertPath)")
         print("CA Key:         \(Self.caKeyPath)")
         print("Subject:        Pry CA")
@@ -112,7 +112,7 @@ final class CertificateAuthority {
 }
 
 extension Certificate {
-    static func PEMRepresentation(_ cert: Certificate) throws -> String {
+    public static func PEMRepresentation(_ cert: Certificate) throws -> String {
         var serializer = DER.Serializer()
         try cert.serialize(into: &serializer)
         let derBytes = serializer.serializedBytes
