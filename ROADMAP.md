@@ -7,13 +7,13 @@
 - [x] Logging a stdout + archivo
 - [x] CLI: start, stop, mock, mocks, log, watch, help
 
-## v0.2 — HTTPS/TLS (en progreso)
+## v0.2 — HTTPS/TLS ✅
 - [x] CA certificate generation (P256, ECDSA)
 - [x] Watchlist (.prywatch + CLI)
 - [x] CONNECT handler state machine
 - [x] `pry trust` — instalar CA en Simulator
-- [ ] HTTPS tunneling (GlueHandler bytes flow)
-- [ ] TLS interception (MITM pipeline)
+- [x] HTTPS tunneling (GlueHandler + state machine fix)
+- [x] TLS interception (MITM pipeline)
 - [ ] Detección de certificate pinning
 
 ## v0.3 — Testing & Quality
