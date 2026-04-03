@@ -29,15 +29,22 @@ func printUsage() {
       pry watch clear            Clear filter
       pry trust                  Install CA cert in iOS Simulator
       pry ca                     Show CA certificate info
+      pry map REGEX FILE         Map URL regex to local file
+      pry maps                   List active maps
+      pry maps clear             Clear all maps
+      pry header add NAME VALUE  Add header to all requests
+      pry header remove NAME     Remove header from all requests
+      pry headers                List active header rules
+      pry headers clear          Clear all header rules
+      pry export har FILE        Export traffic as HAR 1.2
 
     Examples:
       pry start
       pry add api.myapp.com
-      pry add staging.myapp.com
-      pry trust
-      pry start --port 9090
       pry mock /api/login '{"token":"abc123"}'
-      pry log
+      pry map '/api/v1/.*' mock-data.json
+      pry header add Authorization "Bearer token123"
+      pry export har traffic.har
     """)
 }
 
@@ -164,6 +171,48 @@ case "start":
                 } else {
                     for (path, resp) in mocks {
                         OutputBroker.shared.log("  \(path) -> \(resp.prefix(60))", type: .info)
+                    }
+                }
+            case "map":
+                if tuiArgs.count >= 3 {
+                    MapLocal.save(regex: tuiArgs[1], filePath: tuiArgs[2])
+                    OutputBroker.shared.log(info("🐱 Map: \(tuiArgs[1]) → \(tuiArgs[2])"), type: .info)
+                }
+            case "maps":
+                let maps = MapLocal.loadAll()
+                if maps.isEmpty {
+                    OutputBroker.shared.log("No maps registered", type: .info)
+                } else {
+                    for m in maps {
+                        OutputBroker.shared.log("  \(m.regex) → \(m.filePath)", type: .info)
+                    }
+                }
+            case "header":
+                if tuiArgs.count >= 4 && tuiArgs[1] == "add" {
+                    let value = tuiArgs.dropFirst(3).joined(separator: " ")
+                    HeaderRewrite.addRule(name: tuiArgs[2], value: value)
+                    OutputBroker.shared.log(info("🐱 Header: +\(tuiArgs[2])"), type: .info)
+                } else if tuiArgs.count >= 3 && tuiArgs[1] == "remove" {
+                    HeaderRewrite.removeRule(name: tuiArgs[2])
+                    OutputBroker.shared.log(info("🐱 Header: -\(tuiArgs[2])"), type: .info)
+                }
+            case "headers":
+                let rules = HeaderRewrite.loadAll()
+                if rules.isEmpty {
+                    OutputBroker.shared.log("No header rules", type: .info)
+                } else {
+                    for r in rules {
+                        let prefix = r.action == .add ? "+" : "-"
+                        OutputBroker.shared.log("  \(prefix) \(r.name): \(r.value ?? "")", type: .info)
+                    }
+                }
+            case "export":
+                if tuiArgs.count >= 3 && tuiArgs[1] == "har" {
+                    do {
+                        try HARExporter.exportToFile(from: RequestStore.shared, path: tuiArgs[2])
+                        OutputBroker.shared.log(info("🐱 Exported HAR to \(tuiArgs[2])"), type: .info)
+                    } catch {
+                        OutputBroker.shared.log(errText("Export failed: \(error)"), type: .error)
                     }
                 }
             default:
@@ -445,6 +494,92 @@ case "watch":
         Config.set("filter", value: args[1])
         print("🐱 Watching: \(args[1])")
         print("   Restart proxy for changes to take effect")
+    }
+
+case "map":
+    if args.count >= 3 {
+        let regex = args[1]
+        let filePath = args[2]
+        guard FileManager.default.fileExists(atPath: filePath) else {
+            print("Error: File not found: \(filePath)")
+            exit(1)
+        }
+        MapLocal.save(regex: regex, filePath: filePath)
+        print("🐱 Map registered: \(regex) → \(filePath)")
+    } else {
+        print("Usage: pry map '/api/v1/.*' response.json")
+        exit(1)
+    }
+
+case "maps":
+    if args.count >= 2 && args[1] == "clear" {
+        MapLocal.clear()
+        print("🐱 All maps cleared")
+    } else {
+        let maps = MapLocal.loadAll()
+        if maps.isEmpty {
+            print("No maps registered")
+        } else {
+            print("Active maps:")
+            for m in maps {
+                print("  \(m.regex) → \(m.filePath)")
+            }
+        }
+    }
+
+case "header":
+    guard args.count >= 3 else {
+        print("Usage: pry header add NAME VALUE")
+        print("       pry header remove NAME")
+        exit(1)
+    }
+    let action = args[1]
+    if action == "add" && args.count >= 4 {
+        let name = args[2]
+        let value = args.dropFirst(3).joined(separator: " ")
+        HeaderRewrite.addRule(name: name, value: value)
+        print("🐱 Header rule: add \(name): \(value)")
+    } else if action == "remove" {
+        HeaderRewrite.removeRule(name: args[2])
+        print("🐱 Header rule: remove \(args[2])")
+    } else {
+        print("Usage: pry header add NAME VALUE")
+        print("       pry header remove NAME")
+        exit(1)
+    }
+
+case "headers":
+    if args.count >= 2 && args[1] == "clear" {
+        HeaderRewrite.clear()
+        print("🐱 All header rules cleared")
+    } else {
+        let rules = HeaderRewrite.loadAll()
+        if rules.isEmpty {
+            print("No header rules")
+        } else {
+            print("Active header rules:")
+            for r in rules {
+                if r.action == .add {
+                    print("  + \(r.name): \(r.value ?? "")")
+                } else {
+                    print("  - \(r.name)")
+                }
+            }
+        }
+    }
+
+case "export":
+    guard args.count >= 3 && args[1] == "har" else {
+        print("Usage: pry export har output.har")
+        exit(1)
+    }
+    let filePath = args[2]
+    do {
+        try HARExporter.exportToFile(from: RequestStore.shared, path: filePath)
+        print("🐱 Exported HAR to \(filePath)")
+    } catch {
+        print("Error: \(error)")
+        exit(1)
     }
 
 case "help", "--help", "-h":

@@ -235,6 +235,9 @@ public class TUI {
                 case "f":
                     cycleFilter()
                     return
+                case "r":
+                    repeatSelectedRequest()
+                    return
                 case "/":
                     isSearchMode = true
                     commandBuffer = "/"
@@ -294,6 +297,18 @@ public class TUI {
         DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
             self?.statusMessage = nil
             self?.needsFullRedraw = true
+        }
+    }
+
+    private func repeatSelectedRequest() {
+        let requests = getFilteredRequests()
+        guard selectedIndex < requests.count else { return }
+        let req = requests[selectedIndex]
+        guard !req.isTunnel else { return }
+        statusMessage = "🔄 Repeating \(req.method) \(req.url)..."
+        needsFullRedraw = true
+        DispatchQueue.global().async {
+            RequestRepeater.repeat_(request: req, proxyPort: self.port)
         }
     }
 
@@ -401,7 +416,7 @@ public class TUI {
         } else if let query = searchQuery {
             right = "[/: \(query)] Esc clear │ "
         }
-        right += "c curl │ f filter │ / search │ q quit "
+        right += "c curl │ r repeat │ f filter │ / search │ q quit "
 
         let padding = max(0, cols - left.count - center.count - right.count)
         let leftPad = padding / 2
