@@ -2,8 +2,8 @@ import Foundation
 
 /// Thread-safe output broker. All proxy handlers write here instead of print().
 /// In TUI mode, the TUI reads from the buffer. In headless mode, it prints directly.
-class OutputBroker {
-    static let shared = OutputBroker()
+public class OutputBroker {
+    public static let shared = OutputBroker()
 
     private let queue = DispatchQueue(label: "pry.output", qos: .userInteractive)
     private var entries: [LogEntry] = []
@@ -11,14 +11,14 @@ class OutputBroker {
     private var maxEntries = 500
     private var onNewEntry: ((LogEntry) -> Void)?
 
-    struct LogEntry {
-        let timestamp: Date
-        let text: String       // Plain text (no ANSI)
-        let colored: String    // With ANSI colors
-        let type: EntryType
+    public struct LogEntry {
+        public let timestamp: Date
+        public let text: String
+        public let colored: String
+        public let type: EntryType
     }
 
-    enum EntryType {
+    public enum EntryType {
         case request
         case response
         case mock
@@ -28,21 +28,21 @@ class OutputBroker {
         case info
     }
 
-    func setTUIMode(callback: @escaping (LogEntry) -> Void) {
+    public func setTUIMode(callback: @escaping (LogEntry) -> Void) {
         queue.sync {
             headless = false
             onNewEntry = callback
         }
     }
 
-    func setHeadlessMode() {
+    public func setHeadlessMode() {
         queue.sync {
             headless = true
             onNewEntry = nil
         }
     }
 
-    func log(_ colored: String, plain: String? = nil, type: EntryType = .info) {
+    public func log(_ colored: String, plain: String? = nil, type: EntryType = .info) {
         let entry = LogEntry(
             timestamp: Date(),
             text: plain ?? stripANSI(colored),

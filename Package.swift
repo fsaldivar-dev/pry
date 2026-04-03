@@ -6,7 +6,8 @@ let package = Package(
     name: "pry",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "pry", targets: ["Pry"])
+        .executable(name: "pry", targets: ["Pry"]),
+        .library(name: "PryLib", targets: ["PryLib"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.62.0"),
@@ -14,8 +15,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0"),
     ],
     targets: [
-        .executableTarget(
-            name: "Pry",
+        .target(
+            name: "PryLib",
             dependencies: [
                 .product(name: "NIO", package: "swift-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),
@@ -24,7 +25,17 @@ let package = Package(
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "X509", package: "swift-certificates"),
             ],
+            path: "Sources/PryLib"
+        ),
+        .executableTarget(
+            name: "Pry",
+            dependencies: ["PryLib"],
             path: "Sources/Pry"
+        ),
+        .testTarget(
+            name: "PryLibTests",
+            dependencies: ["PryLib"],
+            path: "Tests/PryLibTests"
         ),
     ]
 )
