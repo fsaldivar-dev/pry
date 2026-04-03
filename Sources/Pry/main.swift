@@ -14,6 +14,10 @@ func printUsage() {
     Usage:
       pry start [--port PORT]    Start proxy (default: 8080)
       pry stop                   Stop running proxy
+      pry add DOMAIN             Add domain to HTTPS interception watchlist
+      pry add domains.txt        Add domains from file
+      pry remove DOMAIN          Remove domain from watchlist
+      pry list                   Show intercepted domains
       pry mock PATH RESPONSE     Mock an endpoint with JSON
       pry mock PATH file.json    Mock an endpoint with a JSON file
       pry mocks                  List active mocks
@@ -22,13 +26,16 @@ func printUsage() {
       pry log clear              Clear log
       pry watch PATTERN          Filter traffic by domain pattern
       pry watch clear            Clear filter
+      pry trust                  Install CA cert in iOS Simulator
+      pry ca                     Show CA certificate info
 
     Examples:
       pry start
+      pry add api.myapp.com
+      pry add staging.myapp.com
+      pry trust
       pry start --port 9090
       pry mock /api/login '{"token":"abc123"}'
-      pry mock /api/users users.json
-      pry watch api.myapp.com
       pry log
     """)
 }
@@ -87,6 +94,90 @@ case "stop":
     try? FileManager.default.removeItem(atPath: Config.pidFile)
     print("🐱 Pry stopped (PID \(pid))")
 
+case "add":
+    guard args.count >= 2 else {
+        print("Usage: pry add api.myapp.com")
+        print("       pry add domains.txt")
+        exit(1)
+    }
+    let arg = args[1]
+    if FileManager.default.fileExists(atPath: arg) {
+        do {
+            try Watchlist.addFromFile(arg)
+            let domains = Watchlist.load()
+            print("🐱 Domains loaded from \(arg) (\(domains.count) total)")
+        } catch {
+            print("Error: \(error)")
+            exit(1)
+        }
+    } else {
+        Watchlist.add(arg)
+        print("🐱 Added to watchlist: \(arg)")
+    }
+
+case "remove":
+    guard args.count >= 2 else {
+        print("Usage: pry remove api.myapp.com")
+        exit(1)
+    }
+    Watchlist.remove(args[1])
+    print("🐱 Removed from watchlist: \(args[1])")
+
+case "list":
+    let domains = Watchlist.load()
+    if domains.isEmpty {
+        print("No domains in watchlist")
+        print("Usage: pry add api.myapp.com")
+    } else {
+        print("Intercepted domains:")
+        for domain in domains.sorted() {
+            print("  \(domain)")
+        }
+    }
+
+case "trust":
+    let caPath = CertificateAuthority.caCertPath
+    guard FileManager.default.fileExists(atPath: caPath) else {
+        print("No CA certificate found. Run 'pry start' first to generate one.")
+        exit(1)
+    }
+
+    print("🐱 Installing CA certificate in iOS Simulator...")
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+    process.arguments = ["simctl", "keychain", "booted", "add-root-cert", caPath]
+    do {
+        try process.run()
+        process.waitUntilExit()
+        if process.terminationStatus == 0 {
+            print("   CA installed successfully!")
+            print("")
+            print("   Next step: On the Simulator, go to")
+            print("   Settings > General > About > Certificate Trust Settings")
+            print("   and enable trust for 'Pry CA'")
+        } else {
+            print("   Failed. Is a Simulator booted?")
+            print("   Try: open -a Simulator")
+        }
+    } catch {
+        print("Error: \(error)")
+        exit(1)
+    }
+
+case "ca":
+    let caPath = CertificateAuthority.caCertPath
+    if FileManager.default.fileExists(atPath: caPath) {
+        print("🐱 CA Certificate")
+        print("   Path: \(caPath)")
+        print("   Key:  \(CertificateAuthority.caKeyPath)")
+        if let content = try? String(contentsOfFile: caPath, encoding: .utf8) {
+            let lines = content.components(separatedBy: "\n").count
+            print("   Format: PEM (\(lines) lines)")
+        }
+    } else {
+        print("No CA certificate found. Run 'pry start' first to generate one.")
+    }
+
 case "mock":
     guard args.count >= 3 else {
         print("Usage: pry mock /path '{\"key\":\"value\"}'")
@@ -96,7 +187,6 @@ case "mock":
     let path = args[1]
     let responseArg = args[2]
 
-    // Check if it's a file path
     var json: String
     if FileManager.default.fileExists(atPath: responseArg) {
         guard let content = try? String(contentsOfFile: responseArg, encoding: .utf8) else {
@@ -108,7 +198,6 @@ case "mock":
         json = responseArg
     }
 
-    // Validate JSON
     guard (try? JSONSerialization.jsonObject(with: json.data(using: .utf8)!)) != nil else {
         print("Error: \(ProxyError.invalidJSON(json))")
         exit(1)
