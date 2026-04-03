@@ -127,7 +127,7 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
 
     private func connectFailed(error: Error, context: ChannelHandlerContext) {
-        print(errText("!!! CONNECT failed: \(error)"))
+        OutputBroker.shared.log(errText("!!! CONNECT failed: \(error)"))
         state = .upgradeFailed
         let headers = HTTPHeaders([("Content-Length", "0"), ("Connection", "close")])
         let head = HTTPResponseHead(version: .init(major: 1, minor: 1), status: .badGateway, headers: headers)
@@ -155,7 +155,8 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
 
     private func setupTunnel(peerChannel: Channel, context: ChannelHandlerContext) {
-        print(tunnel("--- TUNNEL \(connectHost) (passthrough)"))
+        OutputBroker.shared.log(tunnel("--- TUNNEL \(connectHost) (passthrough)"), type: .tunnel)
+        BodyPrinter.storeTunnel(host: connectHost)
         Config.appendLog("TUNNEL \(connectHost)")
 
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
@@ -169,7 +170,7 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
             // Remove self last — this forwards any pending bytes via removeHandler()
             context.pipeline.syncOperations.removeHandler(self, promise: nil)
         } catch {
-            print(errText("!!! Tunnel setup failed for \(connectHost): \(error)"))
+            OutputBroker.shared.log(errText("!!! Tunnel setup failed for \(connectHost): \(error)"))
             peerChannel.close(mode: .all, promise: nil)
             context.close(promise: nil)
         }
@@ -211,11 +212,11 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
             }.flatMap {
                 context.pipeline.removeHandler(self)
             }.whenFailure { error in
-                print(errText("!!! TLS setup failed for \(host): \(error)"))
+                OutputBroker.shared.log(errText("!!! TLS setup failed for \(host): \(error)"))
                 context.close(promise: nil)
             }
         } catch {
-            print(errText("!!! Cert generation failed for \(host): \(error)"))
+            OutputBroker.shared.log(errText("!!! Cert generation failed for \(host): \(error)"))
             context.close(promise: nil)
         }
     }
@@ -337,12 +338,12 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                         }
                         remoteChannel.writeAndFlush(NIOAny(HTTPClientRequestPart.end(nil)), promise: nil)
                     case .failure(let error):
-                        print(errText("!!! TLS forward failed to \(self.host): \(error)"))
+                        OutputBroker.shared.log(errText("!!! TLS forward failed to \(self.host): \(error)"))
                         context.close(promise: nil)
                     }
                 }
         } catch {
-            print(errText("!!! TLS context failed: \(error)"))
+            OutputBroker.shared.log(errText("!!! TLS context failed: \(error)"))
             context.close(promise: nil)
         }
     }
@@ -386,7 +387,7 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        print(errText("!!! TLS response error from \(host): \(error)"))
+        OutputBroker.shared.log(errText("!!! TLS response error from \(host): \(error)"))
         clientChannel.close(promise: nil)
         context.close(promise: nil)
     }
