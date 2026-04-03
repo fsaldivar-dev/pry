@@ -182,10 +182,40 @@ case "mock":
     guard args.count >= 3 else {
         print("Usage: pry mock /path '{\"key\":\"value\"}'")
         print("       pry mock /path response.json")
+        print("       pry mock domain.com '{\"key\":\"value\"}'")
+        print("       pry mock https://domain.com/path '{\"key\":\"value\"}'")
         exit(1)
     }
-    let path = args[1]
+    let rawTarget = args[1]
     let responseArg = args[2]
+
+    // Parse target: could be /path, domain.com, domain.com/path, or https://domain.com/path
+    var mockPath: String
+    var mockDomain: String?
+
+    if rawTarget.hasPrefix("/") {
+        // Simple path: /api/login
+        mockPath = rawTarget
+    } else if rawTarget.hasPrefix("http://") || rawTarget.hasPrefix("https://") {
+        // Full URL: https://domain.com/path
+        if let components = URLComponents(string: rawTarget) {
+            mockDomain = components.host
+            mockPath = components.path.isEmpty ? "/" : components.path
+        } else {
+            mockPath = rawTarget
+        }
+    } else {
+        // Domain or domain/path: domain.com or domain.com/path
+        let parts = rawTarget.split(separator: "/", maxSplits: 1)
+        mockDomain = String(parts[0])
+        mockPath = parts.count > 1 ? "/\(parts[1])" : "/"
+    }
+
+    // Auto-add domain to watchlist for HTTPS interception
+    if let domain = mockDomain {
+        Watchlist.add(domain)
+        print("🐱 Added to watchlist: \(domain)")
+    }
 
     var json: String
     if FileManager.default.fileExists(atPath: responseArg) {
@@ -203,8 +233,14 @@ case "mock":
         exit(1)
     }
 
-    Config.saveMock(path: path, response: json)
-    print("🐱 Mock registered: \(path)")
+    // Store mock with domain context if available
+    let mockKey = mockDomain != nil ? "\(mockDomain!):\(mockPath)" : mockPath
+    Config.saveMock(path: mockKey, response: json)
+    if let domain = mockDomain {
+        print("🐱 Mock registered: https://\(domain)\(mockPath)")
+    } else {
+        print("🐱 Mock registered: \(mockPath)")
+    }
 
 case "mocks":
     if args.count >= 2 && args[1] == "clear" {
