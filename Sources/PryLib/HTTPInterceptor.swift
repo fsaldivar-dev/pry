@@ -54,8 +54,19 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
             return
         }
 
+        // Map Local check (regex → local file)
+        if let fileContent = MapLocal.matchContent(url: path) {
+            respondWithMock(context: context, json: fileContent, path: path, requestId: requestId)
+            return
+        }
+
+        // Apply header rewrites before forwarding
+        var rewrittenHead = head
+        let rewrittenHeaders = HeaderRewrite.apply(to: head.headers.map { ($0.name, $0.value) })
+        rewrittenHead.headers = .init(rewrittenHeaders.map { (name: $0.0, value: $0.1) })
+
         // Forward to real server
-        forwardRequest(context: context, host: host, port: port, head: head, body: body, requestId: requestId)
+        forwardRequest(context: context, host: host, port: port, head: rewrittenHead, body: body, requestId: requestId)
     }
 
     private func findMock(for path: String, host: String) -> String? {
