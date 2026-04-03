@@ -56,12 +56,35 @@ case "start":
         port = p
     }
 
-    // Check if already running
+    // Check if already running — try to clean up zombie processes
     if let pidStr = try? String(contentsOfFile: Config.pidFile, encoding: .utf8),
-       let pid = Int32(pidStr.trimmingCharacters(in: .whitespacesAndNewlines)),
-       kill(pid, 0) == 0 {
-        print("Error: \(ProxyError.alreadyRunning) (PID \(pid))")
-        exit(1)
+       let pid = Int32(pidStr.trimmingCharacters(in: .whitespacesAndNewlines)) {
+        if kill(pid, 0) == 0 {
+            print("Error: \(ProxyError.alreadyRunning) (PID \(pid))")
+            print("   Run 'pry stop' first")
+            exit(1)
+        } else {
+            // PID file exists but process is dead — clean up
+            try? FileManager.default.removeItem(atPath: Config.pidFile)
+        }
+    }
+
+    // Check if port is occupied by orphan process
+    let checkPort = Process()
+    checkPort.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+    checkPort.arguments = ["-i", ":\(port)", "-t"]
+    let checkPipe = Pipe()
+    checkPort.standardOutput = checkPipe
+    checkPort.standardError = FileHandle.nullDevice
+    if let _ = try? checkPort.run() {
+        checkPort.waitUntilExit()
+        let output = String(data: checkPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let pids = output.split(separator: "\n").compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
+        if !pids.isEmpty {
+            print("⚠️  Port \(port) in use by PID \(pids[0]). Cleaning up...")
+            for pid in pids { kill(pid, SIGTERM) }
+            usleep(500_000) // Wait 0.5s for process to die
+        }
     }
 
     let server = ProxyServer(port: port)
@@ -85,14 +108,47 @@ case "start":
     }
 
 case "stop":
-    guard let pidStr = try? String(contentsOfFile: Config.pidFile, encoding: .utf8),
-          let pid = Int32(pidStr.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+    var stopped = false
+
+    // Try PID file first
+    if let pidStr = try? String(contentsOfFile: Config.pidFile, encoding: .utf8),
+       let pid = Int32(pidStr.trimmingCharacters(in: .whitespacesAndNewlines)),
+       kill(pid, 0) == 0 {
+        kill(pid, SIGTERM)
+        try? FileManager.default.removeItem(atPath: Config.pidFile)
+        print("🐱 Pry stopped (PID \(pid))")
+        stopped = true
+    }
+
+    // Fallback: find process by port using lsof
+    if !stopped {
+        let port = Config.port()
+        let lsof = Process()
+        lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        lsof.arguments = ["-i", ":\(port)", "-t"]
+        let pipe = Pipe()
+        lsof.standardOutput = pipe
+        lsof.standardError = FileHandle.nullDevice
+        do {
+            try lsof.run()
+            lsof.waitUntilExit()
+            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let pids = output.split(separator: "\n").compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
+            for pid in pids {
+                kill(pid, SIGTERM)
+                print("🐱 Pry stopped (PID \(pid) on port \(port))")
+                stopped = true
+            }
+        } catch {
+            // lsof failed
+        }
+        try? FileManager.default.removeItem(atPath: Config.pidFile)
+    }
+
+    if !stopped {
         print("Error: \(ProxyError.notRunning)")
         exit(1)
     }
-    kill(pid, SIGTERM)
-    try? FileManager.default.removeItem(atPath: Config.pidFile)
-    print("🐱 Pry stopped (PID \(pid))")
 
 case "add":
     guard args.count >= 2 else {
