@@ -8,9 +8,9 @@ Proxy CLI para iOS devs. Swift puro, sin dependencias externas. Intercepta, mock
 
 ## Por qué
 
-Proxyman cuesta $59-$89/año. Charles Proxy igual. mitmproxy es gratuito pero son 50K+ líneas de Python, complejo de leer y de integrar.
+Existen herramientas excelentes para debuggear tráfico de red — Proxyman, Charles, mitmproxy. Cada una resuelve el problema a su manera y el trabajo que hay detrás merece respeto.
 
-Para debuggear una app iOS en el Simulador solo necesitas interceptar HTTP, ver los requests y mockear respuestas. No necesitas una aplicación de escritorio con UI. Necesitas un comando.
+Lo que no existe es una alternativa open source en Swift, liviana, sin dependencias externas, pensada para integrarse nativamente en el ecosistema iOS desde la terminal.
 
 ## Cómo funciona
 
