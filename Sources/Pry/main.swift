@@ -88,23 +88,92 @@ case "start":
     }
 
     let server = ProxyServer(port: port)
+    let headless = args.contains("--headless")
 
-    // Handle Ctrl+C
-    signal(SIGINT) { _ in
-        print("\n🐱 Pry stopped")
-        try? FileManager.default.removeItem(atPath: Config.pidFile)
-        exit(0)
-    }
-    signal(SIGTERM) { _ in
-        try? FileManager.default.removeItem(atPath: Config.pidFile)
-        exit(0)
-    }
+    if headless {
+        // Headless mode — direct print, blocking
+        signal(SIGINT) { _ in
+            print("\n🐱 Pry stopped")
+            try? FileManager.default.removeItem(atPath: Config.pidFile)
+            exit(0)
+        }
+        signal(SIGTERM) { _ in
+            try? FileManager.default.removeItem(atPath: Config.pidFile)
+            exit(0)
+        }
+        do {
+            try server.startAndWait()
+        } catch {
+            print("Error: \(error)")
+            exit(1)
+        }
+    } else {
+        // TUI mode
+        do {
+            try server.start()
+        } catch {
+            print("Error: \(error)")
+            exit(1)
+        }
 
-    do {
-        try server.start()
-    } catch {
-        print("Error: \(error)")
-        exit(1)
+        let tui = TUI(port: port)
+        tui.onCommand = { input in
+            // Parse and execute commands from TUI command line
+            let tuiArgs = input.split(separator: " ").map(String.init)
+            guard let cmd = tuiArgs.first else { return }
+            switch cmd {
+            case "mock":
+                if tuiArgs.count >= 3 {
+                    let path = tuiArgs[1]
+                    let json = tuiArgs.dropFirst(2).joined(separator: " ")
+                    if path.hasPrefix("/") {
+                        Config.saveMock(path: path, response: json)
+                        OutputBroker.shared.log(mock("🐱 Mock registered: \(path)"), type: .mock)
+                    } else {
+                        // Domain mock
+                        Watchlist.add(path)
+                        let parts = path.split(separator: "/", maxSplits: 1)
+                        let domain = String(parts[0])
+                        let mockPath = parts.count > 1 ? "/\(parts[1])" : "/"
+                        Config.saveMock(path: "\(domain):\(mockPath)", response: json)
+                        OutputBroker.shared.log(mock("🐱 Mock registered: \(domain)\(mockPath)"), type: .mock)
+                    }
+                }
+            case "add":
+                if tuiArgs.count >= 2 {
+                    Watchlist.add(tuiArgs[1])
+                    OutputBroker.shared.log(info("🐱 Added: \(tuiArgs[1])"), type: .info)
+                }
+            case "remove":
+                if tuiArgs.count >= 2 {
+                    Watchlist.remove(tuiArgs[1])
+                    OutputBroker.shared.log(info("🐱 Removed: \(tuiArgs[1])"), type: .info)
+                }
+            case "list":
+                let domains = Watchlist.load()
+                if domains.isEmpty {
+                    OutputBroker.shared.log("No domains in watchlist", type: .info)
+                } else {
+                    OutputBroker.shared.log("Domains: \(domains.sorted().joined(separator: ", "))", type: .info)
+                }
+            case "mocks":
+                let mocks = Config.loadMocks()
+                if mocks.isEmpty {
+                    OutputBroker.shared.log("No mocks registered", type: .info)
+                } else {
+                    for (path, resp) in mocks {
+                        OutputBroker.shared.log("  \(path) -> \(resp.prefix(60))", type: .info)
+                    }
+                }
+            default:
+                OutputBroker.shared.log(errText("Unknown command: \(cmd)"), type: .error)
+            }
+        }
+        tui.start()
+
+        // TUI exited — cleanup
+        server.shutdown()
+        try? FileManager.default.removeItem(atPath: Config.pidFile)
     }
 
 case "stop":
