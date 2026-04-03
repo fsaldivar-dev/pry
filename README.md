@@ -18,22 +18,6 @@ pry log                                # Ve qué requests pasaron
 pry stop                               # Cierra limpio
 ```
 
-## Integración con AutoPilot
-
-Pry + [AutoPilot](https://github.com/fsaldivar-dev/AutoPilot) = testing E2E completo para iOS. AutoPilot controla la UI, Pry controla la red.
-
-```bash
-pry start
-pry mock /api/login '{"token": "abc123"}'
-auto launch com.myapp
-auto tap "Login"
-auto type "Usuario" "test@test.com"
-auto tap "Entrar"
-pry log
-auto screenshot result.png
-pry stop
-```
-
 ## Stack
 
 - Swift puro
