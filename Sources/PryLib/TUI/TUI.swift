@@ -22,6 +22,14 @@ public class TUI {
     private var commandBuffer: String = ""
     private var commandHistory: [String] = []
 
+    // Filter & Search
+    private var activeFilter: String? = nil  // "GET", "POST", "2xx", "4xx", "5xx"
+    private var searchQuery: String? = nil
+    private var isSearchMode = false
+    private var statusMessage: String? = nil
+    private let filterCycle = [nil, "GET", "POST", "PUT", "DELETE", "2xx", "4xx", "5xx"] as [String?]
+    private var filterIndex = 0
+
     // Layout
     private let port: Int
     private var needsFullRedraw = true
@@ -184,7 +192,12 @@ public class TUI {
             needsDetailRedraw = true
 
         case .enter:
-            if !commandBuffer.isEmpty {
+            if isSearchMode {
+                // Apply search and exit search mode
+                isSearchMode = false
+                commandBuffer = ""
+                renderCommandLine()
+            } else if !commandBuffer.isEmpty {
                 let cmd = commandBuffer
                 commandHistory.append(cmd)
                 commandBuffer = ""
@@ -195,19 +208,65 @@ public class TUI {
         case .backspace:
             if !commandBuffer.isEmpty {
                 commandBuffer.removeLast()
+                if isSearchMode {
+                    if commandBuffer == "/" || commandBuffer.isEmpty {
+                        isSearchMode = false
+                        searchQuery = nil
+                        commandBuffer = ""
+                        selectedIndex = 0
+                        needsListRedraw = true
+                        needsDetailRedraw = true
+                    } else {
+                        applySearch()
+                    }
+                }
                 renderCommandLine()
             }
 
         case .char(let c):
-            if commandBuffer.isEmpty && c == "q" {
-                running = false
-                return
+            if commandBuffer.isEmpty {
+                switch c {
+                case "q":
+                    running = false
+                    return
+                case "c":
+                    copySelectedAsCurl()
+                    return
+                case "f":
+                    cycleFilter()
+                    return
+                case "/":
+                    isSearchMode = true
+                    commandBuffer = "/"
+                    renderCommandLine()
+                    return
+                default:
+                    break
+                }
             }
             commandBuffer.append(c)
+            if isSearchMode {
+                applySearch()
+            }
             renderCommandLine()
 
         case .escape:
-            if !commandBuffer.isEmpty {
+            if isSearchMode {
+                isSearchMode = false
+                searchQuery = nil
+                commandBuffer = ""
+                selectedIndex = 0
+                needsListRedraw = true
+                needsDetailRedraw = true
+                renderCommandLine()
+            } else if activeFilter != nil {
+                activeFilter = nil
+                filterIndex = 0
+                selectedIndex = 0
+                needsListRedraw = true
+                needsDetailRedraw = true
+                needsFullRedraw = true
+            } else if !commandBuffer.isEmpty {
                 commandBuffer = ""
                 renderCommandLine()
             }
@@ -215,6 +274,82 @@ public class TUI {
         default:
             break
         }
+    }
+
+    // MARK: - Actions
+
+    private func copySelectedAsCurl() {
+        let requests = getFilteredRequests()
+        guard selectedIndex < requests.count else { return }
+        let req = requests[selectedIndex]
+        let https = Watchlist.matches(req.host)
+        let curl = CurlGenerator.generate(from: req, https: https)
+        if CurlGenerator.copyToClipboard(curl) {
+            statusMessage = "✓ Copied to clipboard"
+        } else {
+            statusMessage = "✗ Copy failed"
+        }
+        needsFullRedraw = true
+        // Clear message after ~2 seconds (checked in run loop)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.statusMessage = nil
+            self?.needsFullRedraw = true
+        }
+    }
+
+    private func cycleFilter() {
+        filterIndex = (filterIndex + 1) % filterCycle.count
+        activeFilter = filterCycle[filterIndex]
+        searchQuery = nil
+        isSearchMode = false
+        selectedIndex = 0
+        listScrollOffset = 0
+        needsListRedraw = true
+        needsDetailRedraw = true
+        needsFullRedraw = true
+    }
+
+    private func applySearch() {
+        let query = String(commandBuffer.dropFirst()) // Remove "/"
+        if query.isEmpty {
+            searchQuery = nil
+        } else {
+            searchQuery = query
+        }
+        selectedIndex = 0
+        listScrollOffset = 0
+        needsListRedraw = true
+        needsDetailRedraw = true
+    }
+
+    private func getFilteredRequests() -> [RequestStore.CapturedRequest] {
+        var requests = store.getAll()
+
+        if let filter = activeFilter {
+            if filter.hasSuffix("xx") {
+                // Status code range filter
+                let prefix = UInt(String(filter.first!))! * 100
+                let range = prefix...(prefix + 99)
+                requests = requests.filter { req in
+                    guard let code = req.statusCode else { return false }
+                    return range.contains(code)
+                }
+            } else {
+                // Method filter
+                requests = requests.filter { $0.method.uppercased() == filter }
+            }
+        }
+
+        if let query = searchQuery, !query.isEmpty {
+            requests = requests.filter { req in
+                let lower = query.lowercased()
+                return req.url.lowercased().contains(lower) ||
+                       req.host.lowercased().contains(lower) ||
+                       req.method.lowercased().contains(lower)
+            }
+        }
+
+        return requests
     }
 
     // MARK: - Layout Geometry
@@ -237,7 +372,7 @@ public class TUI {
         buf += renderStatusBar()
         buf += renderPanelHeaders()
 
-        let requests = store.getAll()
+        let requests = getFilteredRequests()
         buf += renderListContent(requests)
         buf += renderDetailContent(requests)
         buf += renderBorders()
@@ -257,8 +392,16 @@ public class TUI {
         let left = " 🐱 Pry :\(port)"
         // Center: stats
         let center = "\(watchlist.count) domains │ \(mocks.count) mocks │ \(count) reqs"
-        // Right: help
-        let right = "↑↓ nav │ Tab mocks │ q quit "
+        // Right: help + status
+        var right = ""
+        if let msg = statusMessage {
+            right = msg + " "
+        } else if let filter = activeFilter {
+            right = "[F: \(filter)] Esc clear │ "
+        } else if let query = searchQuery {
+            right = "[/: \(query)] Esc clear │ "
+        }
+        right += "c curl │ f filter │ / search │ q quit "
 
         let padding = max(0, cols - left.count - center.count - right.count)
         let leftPad = padding / 2
@@ -303,7 +446,7 @@ public class TUI {
     // MARK: - Request List (Left Panel)
 
     private func renderList() {
-        let requests = store.getAll()
+        let requests = getFilteredRequests()
         ANSI.write(renderListContent(requests))
     }
 
@@ -355,7 +498,7 @@ public class TUI {
     // MARK: - Detail Panel (Right)
 
     private func renderDetail() {
-        let requests = store.getAll()
+        let requests = getFilteredRequests()
         ANSI.write(renderDetailContent(requests))
     }
 

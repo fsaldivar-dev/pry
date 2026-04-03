@@ -64,4 +64,30 @@ final class RequestStoreTests: XCTestCase {
         XCTAssertEqual(results.count, 1)
         XCTAssertTrue(results[0].url.contains("login"))
     }
+
+    func testSearchByHost() {
+        store.addRequest(method: "GET", url: "/a", host: "api.myapp.com", appIcon: "", appName: "", headers: [], body: nil)
+        store.addRequest(method: "GET", url: "/b", host: "google.com", appIcon: "", appName: "", headers: [], body: nil)
+        let results = store.search("myapp")
+        XCTAssertEqual(results.count, 1)
+    }
+
+    func testFilteredList() {
+        store.addRequest(method: "GET", url: "/a", host: "a.com", appIcon: "", appName: "", headers: [], body: nil)
+        store.addRequest(method: "POST", url: "/b", host: "b.com", appIcon: "", appName: "", headers: [], body: nil)
+        store.addRequest(method: "PUT", url: "/c", host: "c.com", appIcon: "", appName: "", headers: [], body: nil)
+        store.addRequest(method: "DELETE", url: "/d", host: "d.com", appIcon: "", appName: "", headers: [], body: nil)
+        store.addRequest(method: "GET", url: "/e", host: "e.com", appIcon: "", appName: "", headers: [], body: nil)
+
+        XCTAssertEqual(store.filter(method: "GET").count, 2)
+        XCTAssertEqual(store.filter(method: "POST").count, 1)
+        XCTAssertEqual(store.filter(method: "PUT").count, 1)
+        XCTAssertEqual(store.filter(method: "DELETE").count, 1)
+    }
+
+    func testSearchCaseInsensitive() {
+        store.addRequest(method: "GET", url: "/API/Users", host: "Example.COM", appIcon: "", appName: "", headers: [], body: nil)
+        let results = store.search("api/users")
+        XCTAssertEqual(results.count, 1)
+    }
 }
