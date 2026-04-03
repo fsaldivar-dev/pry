@@ -142,26 +142,53 @@ case "trust":
         exit(1)
     }
 
-    print("🐱 Installing CA certificate in iOS Simulator...")
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-    process.arguments = ["simctl", "keychain", "booted", "add-root-cert", caPath]
+    // Install in macOS system keychain
+    print("🐱 Installing CA certificate in macOS...")
+    let macProcess = Process()
+    macProcess.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+    macProcess.arguments = ["add-trusted-cert", "-d", "-r", "trustRoot", "-k", "/Library/Keychains/System.keychain", caPath]
     do {
-        try process.run()
-        process.waitUntilExit()
-        if process.terminationStatus == 0 {
-            print("   CA installed successfully!")
+        try macProcess.run()
+        macProcess.waitUntilExit()
+        if macProcess.terminationStatus == 0 {
+            print("   macOS: CA installed and trusted")
+        } else {
+            // Try user keychain if system keychain fails (no sudo)
+            let userProcess = Process()
+            userProcess.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+            userProcess.arguments = ["add-trusted-cert", "-r", "trustRoot", "-k", NSHomeDirectory() + "/Library/Keychains/login.keychain-db", caPath]
+            try userProcess.run()
+            userProcess.waitUntilExit()
+            if userProcess.terminationStatus == 0 {
+                print("   macOS: CA installed in user keychain")
+            } else {
+                print("   macOS: Failed. You may need to run with sudo or install manually:")
+                print("   security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db \(caPath)")
+            }
+        }
+    } catch {
+        print("   macOS: Error — \(error)")
+    }
+
+    // Install in iOS Simulator
+    print("🐱 Installing CA certificate in iOS Simulator...")
+    let simProcess = Process()
+    simProcess.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+    simProcess.arguments = ["simctl", "keychain", "booted", "add-root-cert", caPath]
+    do {
+        try simProcess.run()
+        simProcess.waitUntilExit()
+        if simProcess.terminationStatus == 0 {
+            print("   Simulator: CA installed")
             print("")
             print("   Next step: On the Simulator, go to")
             print("   Settings > General > About > Certificate Trust Settings")
             print("   and enable trust for 'Pry CA'")
         } else {
-            print("   Failed. Is a Simulator booted?")
-            print("   Try: open -a Simulator")
+            print("   Simulator: Skipped (no simulator booted)")
         }
     } catch {
-        print("Error: \(error)")
-        exit(1)
+        print("   Simulator: Error — \(error)")
     }
 
 case "ca":
