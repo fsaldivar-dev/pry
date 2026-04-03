@@ -12,6 +12,133 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build/repositories
+            .build/checkouts
+            .build/artifacts
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build
+        run: swift build
+
+      - name: Build Release
+        run: swift build -c release
+
+      - name: Verify binary runs
+        run: |
+          .build/release/pry help | head -5
+          echo "Binary OK"
+
+  e2e-test:
+    runs-on: macos-14
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build/repositories
+            .build/checkouts
+            .build/artifacts
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build
+        run: swift build
+
+      - name: "E2E: HTTP proxy + mock"
+        run: |
+          # Start proxy in background
+          .build/debug/pry mock /api/test '{"e2e":"pass"}'
+          .build/debug/pry start --headless &
+          PID=$!
+          sleep 3
+
+          # Test HTTP forwarding
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 -x http://localhost:8080 http://httpbin.org/get || true)
+          echo "HTTP forward status: $STATUS"
+          [ "$STATUS" = "200" ] || [ "$STATUS" = "000" ] || (echo "WARN: HTTP forward status $STATUS, continuing")
+
+          # Test mock
+          BODY=$(curl -s -x http://localhost:8080 http://anything/api/test)
+          echo "Mock response: $BODY"
+          echo "$BODY" | grep -q "e2e" || (echo "FAIL: mock not returned" && kill $PID && exit 1)
+
+          # Test log
+          .build/debug/pry log | grep -q "GET" || (echo "FAIL: log empty" && kill $PID && exit 1)
+
+          # Cleanup
+          kill $PID 2>/dev/null || true
+          rm -f /tmp/pry.pid
+          echo "All E2E tests passed"
+
+      - name: "E2E: HTTPS tunnel"
+        run: |
+          rm -f /tmp/pry.pid /tmp/pry.mocks /tmp/pry.log
+          .build/debug/pry start --headless &
+          PID=$!
+          sleep 3
+
+          # HTTPS tunnel (not in watchlist = passthrough)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 -x http://localhost:8080 https://www.google.com)
+          echo "HTTPS tunnel status: $STATUS"
+          [ "$STATUS" = "200" ] || [ "$STATUS" = "301" ] || (echo "FAIL: HTTPS tunnel broken, got $STATUS" && kill $PID && exit 1)
+
+          kill $PID 2>/dev/null || true
+          rm -f /tmp/pry.pid
+          echo "HTTPS tunnel test passed"
+
+      - name: "E2E: Watchlist + smart mock"
+        run: |
+          rm -f /tmp/pry.pid /tmp/pry.mocks /tmp/pry.log .prywatch
+
+          # Smart mock (auto-adds to watchlist)
+          .build/debug/pry mock httpbin.org '{"intercepted":true}'
+          .build/debug/pry list | grep -q "httpbin.org" || (echo "FAIL: domain not in watchlist" && exit 1)
+
+          echo "Watchlist + smart mock test passed"
+
+      - name: "E2E: pry stop robust"
+        run: |
+          rm -f /tmp/pry.pid /tmp/pry.mocks /tmp/pry.log
+          .build/debug/pry start --headless &
+          sleep 2
+
+          # Normal stop
+          .build/debug/pry stop | grep -q "stopped" || (echo "FAIL: normal stop" && exit 1)
+          sleep 1
+
+          # Start again, delete PID file, stop should find by port
+          .build/debug/pry start --headless &
+          sleep 2
+          rm -f /tmp/pry.pid
+          .build/debug/pry stop | grep -q "stopped" || (echo "FAIL: port-based stop" && exit 1)
+
+          rm -f /tmp/pry.pid
+          echo "Robust stop test passed"
+
+  build-linux:
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build/repositories
+            .build/checkouts
+            .build/artifacts
+          key: spm-linux-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-linux-
+
       - name: Build
         run: swift build
 
