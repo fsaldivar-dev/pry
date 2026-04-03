@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+*.xcodeproj
+DerivedData/
+.prywatch
+.pryconfig
+/tmp/pry.*
