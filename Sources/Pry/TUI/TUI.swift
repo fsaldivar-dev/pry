@@ -54,6 +54,7 @@ class TUI {
             self?.storeChanged = true
         }
 
+        renderSplash()
         runLoop()
         cleanup()
     }
@@ -65,6 +66,42 @@ class TUI {
         store.onChange = nil
         terminal.disableRawMode()
         ANSI.write(ANSI.showCursor + ANSI.exitAltBuffer)
+    }
+
+    // MARK: - Splash Screen
+
+    private func renderSplash() {
+        let cat = [
+            "    ╱|、",
+            "   (˚ˎ 。7",
+            "    |、˜〵",
+            "    じしˍ,)ノ     ╭──────────────────╮",
+            "   ·····•·····    │  p r y  v0.2     │",
+            "                  │  proxy for devs  │",
+            "                  ╰──────────────────╯",
+        ]
+
+        let startRow = max(1, (rows - cat.count) / 2 - 2)
+        var buf = ANSI.clearScreen
+
+        for (i, line) in cat.enumerated() {
+            let col = max(1, (cols - 42) / 2)
+            buf += ANSI.moveTo(row: startRow + i, col: col) + ANSI.fgCyan + line + ANSI.reset
+        }
+
+        // Subtitle
+        let subRow = startRow + cat.count + 2
+        let subtitle = "Listening on :\(port) · Press any key to continue"
+        let subCol = max(1, (cols - subtitle.count) / 2)
+        buf += ANSI.moveTo(row: subRow, col: subCol) + ANSI.dim + subtitle + ANSI.reset
+
+        ANSI.write(buf)
+
+        // Wait for any key or first request
+        while running {
+            if let _ = terminal.readKey() { break }
+            if store.count() > 0 { break }
+        }
     }
 
     // MARK: - Run Loop
