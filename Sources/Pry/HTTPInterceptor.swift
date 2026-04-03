@@ -42,20 +42,20 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
             return
         }
 
-        // Log
+        // Log + store
         let logEntry = "\(head.method) \(head.uri) -> \(host):\(port)"
-        BodyPrinter.printRequestHead(head, host: host, port: port)
+        let requestId = BodyPrinter.printRequestHead(head, host: host, port: port)
         BodyPrinter.printRequestBody(body)
         Config.appendLog(logEntry)
 
         // Mock check
         if let mockResponse = findMock(for: path, host: host) {
-            respondWithMock(context: context, json: mockResponse, path: path)
+            respondWithMock(context: context, json: mockResponse, path: path, requestId: requestId)
             return
         }
 
         // Forward to real server
-        forwardRequest(context: context, host: host, port: port, head: head, body: body)
+        forwardRequest(context: context, host: host, port: port, head: head, body: body, requestId: requestId)
     }
 
     private func findMock(for path: String, host: String) -> String? {
@@ -79,8 +79,9 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         return nil
     }
 
-    private func respondWithMock(context: ChannelHandlerContext, json: String, path: String) {
+    private func respondWithMock(context: ChannelHandlerContext, json: String, path: String, requestId: Int) {
         BodyPrinter.printMock(path: path, json: json)
+        BodyPrinter.storeResponse(requestId: requestId, statusCode: 200, headers: [("Content-Type", "application/json")], body: json, isMock: true)
         Config.appendLog("MOCK \(path) -> 200 OK")
 
         var headers = HTTPHeaders()
@@ -98,14 +99,14 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         context.close(promise: nil)
     }
 
-    private func forwardRequest(context: ChannelHandlerContext, host: String, port: Int, head: HTTPRequestHead, body: ByteBuffer?) {
+    private func forwardRequest(context: ChannelHandlerContext, host: String, port: Int, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int = 0) {
         let clientChannel = context.channel
         let group = context.eventLoop
 
         ClientBootstrap(group: group)
             .channelInitializer { channel in
                 channel.pipeline.addHTTPClientHandlers().flatMap {
-                    channel.pipeline.addHandler(ResponseForwarder(clientChannel: clientChannel, host: host))
+                    channel.pipeline.addHandler(ResponseForwarder(clientChannel: clientChannel, host: host, requestId: requestId))
                 }
             }
             .connect(host: host, port: port)
@@ -126,7 +127,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
                     remoteChannel.writeAndFlush(NIOAny(HTTPClientRequestPart.end(nil)), promise: nil)
 
                 case .failure(let error):
-                    print(errText("!!! Connection failed to \(host):\(port) - \(error)"))
+                    OutputBroker.shared.log(errText("!!! Connection failed to \(host):\(port) - \(error)"))
                     Config.appendLog("ERROR \(host):\(port) - \(error)")
                     clientChannel.close(promise: nil)
                 }
@@ -158,12 +159,15 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
 
     private let clientChannel: Channel
     private let host: String
+    private let requestId: Int
     private var contentType: String?
     private var responseBody: ByteBuffer?
+    private var statusCode: UInt = 0
 
-    init(clientChannel: Channel, host: String) {
+    init(clientChannel: Channel, host: String, requestId: Int = 0) {
         self.clientChannel = clientChannel
         self.host = host
+        self.requestId = requestId
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -171,6 +175,7 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
 
         switch part {
         case .head(let head):
+            statusCode = head.status.code
             BodyPrinter.printResponseHead(head, host: host)
             Config.appendLog("RESPONSE \(host) -> \(head.status.code)")
             contentType = head.headers["Content-Type"].first
@@ -185,6 +190,9 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
         case .end(let trailers):
             if let body = responseBody {
                 BodyPrinter.printResponseBody(body, contentType: contentType)
+                var buf = body
+                let bodyStr = buf.readString(length: buf.readableBytes)
+                BodyPrinter.storeResponse(requestId: requestId, statusCode: statusCode, headers: [], body: bodyStr)
             }
             clientChannel.writeAndFlush(NIOAny(HTTPServerResponsePart.end(trailers))).whenComplete { _ in
                 self.clientChannel.close(promise: nil)
@@ -194,7 +202,7 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        print(errText("!!! Response error from \(host): \(error)"))
+        OutputBroker.shared.log(errText("!!! Response error from \(host): \(error)"))
         clientChannel.close(promise: nil)
         context.close(promise: nil)
     }

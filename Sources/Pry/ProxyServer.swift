@@ -50,26 +50,23 @@ final class ProxyServer {
         let pid = ProcessInfo.processInfo.processIdentifier
         try? "\(pid)".write(toFile: Config.pidFile, atomically: true, encoding: .utf8)
 
-        print("🐱 Pry listening on :\(port)")
+        let out = OutputBroker.shared
+        out.log("🐱 Pry listening on :\(port)", type: .info)
         if ca != nil {
-            print("   HTTPS interception: enabled")
+            out.log("   HTTPS interception: enabled", type: .info)
         }
         if !watchlist.isEmpty {
-            print("   Intercepting \(watchlist.count) domain(s): \(watchlist.sorted().joined(separator: ", "))")
-        } else {
-            print("   No domains in watchlist (HTTPS passthrough)")
+            out.log("   Intercepting \(watchlist.count) domain(s): \(watchlist.sorted().joined(separator: ", "))", type: .info)
         }
         if !mocks.isEmpty {
-            print("   \(mocks.count) mock(s) loaded")
+            out.log("   \(mocks.count) mock(s) loaded", type: .info)
         }
-        print("   Mocks reload on every request (add anytime)")
-        if let filter = filter {
-            print("   Filtering: \(filter)")
-        }
-        print("   Press Ctrl+C to stop\n")
+    }
 
-        // Block until channel closes
-        try channel.closeFuture.wait()
+    /// Blocking start — for headless mode
+    func startAndWait() throws {
+        try start()
+        try channel?.closeFuture.wait()
     }
 
     func shutdown() {
