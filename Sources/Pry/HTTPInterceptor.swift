@@ -8,11 +8,9 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
 
     private var requestHead: HTTPRequestHead?
     private var bodyBuffer: ByteBuffer?
-    private let mocks: [String: String]
     private let filter: String?
 
-    init(mocks: [String: String] = [:], filter: String? = nil) {
-        self.mocks = mocks
+    init(filter: String? = nil) {
         self.filter = filter
     }
 
@@ -50,7 +48,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         Config.appendLog(logEntry)
 
         // Mock check
-        if let mockResponse = findMock(for: path) {
+        if let mockResponse = findMock(for: path, host: host) {
             respondWithMock(context: context, json: mockResponse, path: path)
             return
         }
@@ -59,10 +57,22 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         forwardRequest(context: context, host: host, port: port, head: head, body: body)
     }
 
-    private func findMock(for path: String) -> String? {
-        for (mockPath, response) in mocks {
-            if path.hasPrefix(mockPath) {
-                return response
+    private func findMock(for path: String, host: String) -> String? {
+        let mocks = Config.loadMocks()
+        for (mockKey, response) in mocks {
+            if mockKey.contains(":") {
+                // Domain-scoped mock: "domain.com:/path"
+                let parts = mockKey.split(separator: ":", maxSplits: 1)
+                let mockDomain = String(parts[0])
+                let mockPath = String(parts[1])
+                if host.contains(mockDomain) && path.hasPrefix(mockPath) {
+                    return response
+                }
+            } else {
+                // Simple path mock: "/api/login"
+                if path.hasPrefix(mockKey) {
+                    return response
+                }
             }
         }
         return nil
