@@ -142,26 +142,53 @@ case "trust":
         exit(1)
     }
 
-    print("🐱 Installing CA certificate in iOS Simulator...")
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-    process.arguments = ["simctl", "keychain", "booted", "add-root-cert", caPath]
+    // Install in macOS system keychain
+    print("🐱 Installing CA certificate in macOS...")
+    let macProcess = Process()
+    macProcess.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+    macProcess.arguments = ["add-trusted-cert", "-d", "-r", "trustRoot", "-k", "/Library/Keychains/System.keychain", caPath]
     do {
-        try process.run()
-        process.waitUntilExit()
-        if process.terminationStatus == 0 {
-            print("   CA installed successfully!")
+        try macProcess.run()
+        macProcess.waitUntilExit()
+        if macProcess.terminationStatus == 0 {
+            print("   macOS: CA installed and trusted")
+        } else {
+            // Try user keychain if system keychain fails (no sudo)
+            let userProcess = Process()
+            userProcess.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+            userProcess.arguments = ["add-trusted-cert", "-r", "trustRoot", "-k", NSHomeDirectory() + "/Library/Keychains/login.keychain-db", caPath]
+            try userProcess.run()
+            userProcess.waitUntilExit()
+            if userProcess.terminationStatus == 0 {
+                print("   macOS: CA installed in user keychain")
+            } else {
+                print("   macOS: Failed. You may need to run with sudo or install manually:")
+                print("   security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db \(caPath)")
+            }
+        }
+    } catch {
+        print("   macOS: Error — \(error)")
+    }
+
+    // Install in iOS Simulator
+    print("🐱 Installing CA certificate in iOS Simulator...")
+    let simProcess = Process()
+    simProcess.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+    simProcess.arguments = ["simctl", "keychain", "booted", "add-root-cert", caPath]
+    do {
+        try simProcess.run()
+        simProcess.waitUntilExit()
+        if simProcess.terminationStatus == 0 {
+            print("   Simulator: CA installed")
             print("")
             print("   Next step: On the Simulator, go to")
             print("   Settings > General > About > Certificate Trust Settings")
             print("   and enable trust for 'Pry CA'")
         } else {
-            print("   Failed. Is a Simulator booted?")
-            print("   Try: open -a Simulator")
+            print("   Simulator: Skipped (no simulator booted)")
         }
     } catch {
-        print("Error: \(error)")
-        exit(1)
+        print("   Simulator: Error — \(error)")
     }
 
 case "ca":
@@ -182,10 +209,40 @@ case "mock":
     guard args.count >= 3 else {
         print("Usage: pry mock /path '{\"key\":\"value\"}'")
         print("       pry mock /path response.json")
+        print("       pry mock domain.com '{\"key\":\"value\"}'")
+        print("       pry mock https://domain.com/path '{\"key\":\"value\"}'")
         exit(1)
     }
-    let path = args[1]
+    let rawTarget = args[1]
     let responseArg = args[2]
+
+    // Parse target: could be /path, domain.com, domain.com/path, or https://domain.com/path
+    var mockPath: String
+    var mockDomain: String?
+
+    if rawTarget.hasPrefix("/") {
+        // Simple path: /api/login
+        mockPath = rawTarget
+    } else if rawTarget.hasPrefix("http://") || rawTarget.hasPrefix("https://") {
+        // Full URL: https://domain.com/path
+        if let components = URLComponents(string: rawTarget) {
+            mockDomain = components.host
+            mockPath = components.path.isEmpty ? "/" : components.path
+        } else {
+            mockPath = rawTarget
+        }
+    } else {
+        // Domain or domain/path: domain.com or domain.com/path
+        let parts = rawTarget.split(separator: "/", maxSplits: 1)
+        mockDomain = String(parts[0])
+        mockPath = parts.count > 1 ? "/\(parts[1])" : "/"
+    }
+
+    // Auto-add domain to watchlist for HTTPS interception
+    if let domain = mockDomain {
+        Watchlist.add(domain)
+        print("🐱 Added to watchlist: \(domain)")
+    }
 
     var json: String
     if FileManager.default.fileExists(atPath: responseArg) {
@@ -203,8 +260,14 @@ case "mock":
         exit(1)
     }
 
-    Config.saveMock(path: path, response: json)
-    print("🐱 Mock registered: \(path)")
+    // Store mock with domain context if available
+    let mockKey = mockDomain != nil ? "\(mockDomain!):\(mockPath)" : mockPath
+    Config.saveMock(path: mockKey, response: json)
+    if let domain = mockDomain {
+        print("🐱 Mock registered: https://\(domain)\(mockPath)")
+    } else {
+        print("🐱 Mock registered: \(mockPath)")
+    }
 
 case "mocks":
     if args.count >= 2 && args[1] == "clear" {

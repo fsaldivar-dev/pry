@@ -282,10 +282,19 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
         print(">>> \(logEntry)")
         Config.appendLog(logEntry)
 
-        // Check mocks
+        // Check mocks — supports both "domain:path" and simple "/path" formats
         let mocks = Config.loadMocks()
-        for (mockPath, response) in mocks {
-            if head.uri.hasPrefix(mockPath) {
+        for (mockKey, response) in mocks {
+            let matches: Bool
+            if mockKey.contains(":") {
+                let parts = mockKey.split(separator: ":", maxSplits: 1)
+                let mockDomain = String(parts[0])
+                let mockPath = String(parts[1])
+                matches = host.contains(mockDomain) && head.uri.hasPrefix(mockPath)
+            } else {
+                matches = head.uri.hasPrefix(mockKey)
+            }
+            if matches {
                 print("<<< MOCK \(head.uri) (200 OK)")
                 Config.appendLog("MOCK \(head.uri) -> 200 OK")
                 var headers = HTTPHeaders()
