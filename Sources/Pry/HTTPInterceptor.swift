@@ -44,7 +44,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
 
         // Log
         let logEntry = "\(head.method) \(head.uri) -> \(host):\(port)"
-        print(">>> \(logEntry)")
+        print(request(">>> \(head.method) \(head.uri)") + " " + tunnel("-> \(host):\(port)"))
         Config.appendLog(logEntry)
 
         // Mock check
@@ -79,7 +79,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
     }
 
     private func respondWithMock(context: ChannelHandlerContext, json: String, path: String) {
-        print("<<< MOCK \(path) (200 OK)")
+        print(mock("<<< MOCK \(path) (200 OK)"))
         Config.appendLog("MOCK \(path) -> 200 OK")
 
         var headers = HTTPHeaders()
@@ -125,7 +125,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
                     remoteChannel.writeAndFlush(NIOAny(HTTPClientRequestPart.end(nil)), promise: nil)
 
                 case .failure(let error):
-                    print("!!! Connection failed to \(host):\(port) - \(error)")
+                    print(errText("!!! Connection failed to \(host):\(port) - \(error)"))
                     Config.appendLog("ERROR \(host):\(port) - \(error)")
                     clientChannel.close(promise: nil)
                 }
@@ -168,7 +168,8 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
 
         switch part {
         case .head(let head):
-            print("<<< \(head.status.code) \(host)")
+            let statusColor = head.status.code < 400 ? response("<<< \(head.status.code)") : errText("<<< \(head.status.code)")
+            print("\(statusColor) \(host)")
             Config.appendLog("RESPONSE \(host) -> \(head.status.code)")
             let serverHead = HTTPResponseHead(version: head.version, status: head.status, headers: head.headers)
             clientChannel.write(NIOAny(HTTPServerResponsePart.head(serverHead)), promise: nil)
@@ -185,7 +186,7 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        print("!!! Response error from \(host): \(error)")
+        print(errText("!!! Response error from \(host): \(error)"))
         clientChannel.close(promise: nil)
         context.close(promise: nil)
     }
