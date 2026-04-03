@@ -2,13 +2,13 @@ import NIO
 import NIOHTTP1
 import Foundation
 
-final class ProxyServer {
+public final class ProxyServer {
     private let port: Int
     private let group: MultiThreadedEventLoopGroup
     private var channel: Channel?
     private let ca: CertificateAuthority?
 
-    init(port: Int = Config.defaultPort) {
+    public init(port: Int = Config.defaultPort) {
         self.port = port
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 
@@ -21,7 +21,7 @@ final class ProxyServer {
         }
     }
 
-    func start() throws {
+    public func start() throws {
         let filter = Config.get("filter")
         let watchlist = Watchlist.load()
         let mocks = Config.loadMocks()
@@ -64,12 +64,12 @@ final class ProxyServer {
     }
 
     /// Blocking start — for headless mode
-    func startAndWait() throws {
+    public func startAndWait() throws {
         try start()
         try channel?.closeFuture.wait()
     }
 
-    func shutdown() {
+    public func shutdown() {
         try? channel?.close().wait()
         try? group.syncShutdownGracefully()
         try? FileManager.default.removeItem(atPath: Config.pidFile)

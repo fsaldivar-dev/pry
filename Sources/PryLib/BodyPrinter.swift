@@ -1,12 +1,12 @@
 import Foundation
 import NIOCore
 
-struct BodyPrinter {
-    static let maxBodyPreview = 2000
+public struct BodyPrinter {
+    public static let maxBodyPreview = 2000
     private static let out = OutputBroker.shared
 
     @discardableResult
-    static func printRequestHead(_ head: HTTPRequestHead, host: String, port: Int) -> Int {
+    public static func printRequestHead(_ head: HTTPRequestHead, host: String, port: Int) -> Int {
         let method = "\(head.method)"
         let url = head.uri
         let app = AppIdentifier.identify(from: head.headers)
@@ -31,7 +31,7 @@ struct BodyPrinter {
         )
     }
 
-    static func printRequestBody(_ body: ByteBuffer?) {
+    public static func printRequestBody(_ body: ByteBuffer?) {
         guard let body = body, body.readableBytes > 0 else { return }
         var buf = body
         if let text = buf.readString(length: min(buf.readableBytes, maxBodyPreview)) {
@@ -40,7 +40,7 @@ struct BodyPrinter {
         }
     }
 
-    static func printResponseHead(_ head: HTTPResponseHead, host: String, https: Bool = false) {
+    public static func printResponseHead(_ head: HTTPResponseHead, host: String, https: Bool = false) {
         let scheme = https ? "https" : "http"
         let statusColor = head.status.code < 400
             ? response("<<< \(head.status.code) \(head.status.reasonPhrase ?? "")")
@@ -56,7 +56,7 @@ struct BodyPrinter {
         }
     }
 
-    static func printResponseBody(_ buffer: ByteBuffer, contentType: String?) {
+    public static func printResponseBody(_ buffer: ByteBuffer, contentType: String?) {
         var buf = buffer
         guard buf.readableBytes > 0 else { return }
         guard shouldPrintBody(contentType: contentType) else {
@@ -70,15 +70,15 @@ struct BodyPrinter {
         }
     }
 
-    static func storeResponse(requestId: Int, statusCode: UInt, headers: [(String, String)], body: String?, isMock: Bool = false) {
+    public static func storeResponse(requestId: Int, statusCode: UInt, headers: [(String, String)], body: String?, isMock: Bool = false) {
         RequestStore.shared.updateResponse(id: requestId, statusCode: statusCode, headers: headers, body: body, isMock: isMock)
     }
 
-    static func storeTunnel(host: String) {
+    public static func storeTunnel(host: String) {
         RequestStore.shared.addTunnel(host: host)
     }
 
-    static func printMock(path: String, json: String) {
+    public static func printMock(path: String, json: String) {
         out.log(mock("<<< MOCK \(path) (200 OK)"), type: .mock)
         let formatted = formatBody(json, contentType: "application/json")
         out.log(colored("    Body: ", .dim) + formatted, type: .info)
@@ -118,5 +118,5 @@ struct BodyPrinter {
 }
 
 import NIOHTTP1
-typealias HTTPRequestHead = NIOHTTP1.HTTPRequestHead
-typealias HTTPResponseHead = NIOHTTP1.HTTPResponseHead
+public typealias HTTPRequestHead = NIOHTTP1.HTTPRequestHead
+public typealias HTTPResponseHead = NIOHTTP1.HTTPResponseHead

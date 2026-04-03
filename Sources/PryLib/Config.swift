@@ -1,13 +1,13 @@
 import Foundation
 
-struct Config {
-    static let configFile = ".pryconfig"
-    static let logFile = "/tmp/pry.log"
-    static let pidFile = "/tmp/pry.pid"
-    static let mockFile = "/tmp/pry.mocks"
-    static let defaultPort = 8080
+public struct Config {
+    public static let configFile = ".pryconfig"
+    public static let logFile = "/tmp/pry.log"
+    public static let pidFile = "/tmp/pry.pid"
+    public static let mockFile = "/tmp/pry.mocks"
+    public static let defaultPort = 8080
 
-    static func readAll() -> [String: String] {
+    public static func readAll() -> [String: String] {
         guard let content = try? String(contentsOfFile: configFile, encoding: .utf8) else {
             return [:]
         }
@@ -24,25 +24,25 @@ struct Config {
         return result
     }
 
-    static func get(_ key: String) -> String? {
+    public static func get(_ key: String) -> String? {
         readAll()[key]
     }
 
-    static func set(_ key: String, value: String) {
+    public static func set(_ key: String, value: String) {
         var config = readAll()
         config[key] = value
         let content = config.map { "\($0.key)=\($0.value)" }.joined(separator: "\n")
         try? content.write(toFile: configFile, atomically: true, encoding: .utf8)
     }
 
-    static func port() -> Int {
+    public static func port() -> Int {
         if let portStr = get("port"), let port = Int(portStr) {
             return port
         }
         return defaultPort
     }
 
-    static func appendLog(_ entry: String) {
+    public static func appendLog(_ entry: String) {
         let line = "\(ISO8601DateFormatter().string(from: Date())) \(entry)\n"
         if let handle = FileHandle(forWritingAtPath: logFile) {
             handle.seekToEndOfFile()
@@ -53,7 +53,7 @@ struct Config {
         }
     }
 
-    static func readLog(last n: Int = 50) -> [String] {
+    public static func readLog(last n: Int = 50) -> [String] {
         guard let content = try? String(contentsOfFile: logFile, encoding: .utf8) else {
             return []
         }
@@ -61,11 +61,11 @@ struct Config {
         return Array(lines.suffix(n))
     }
 
-    static func clearLog() {
+    public static func clearLog() {
         try? "".write(toFile: logFile, atomically: true, encoding: .utf8)
     }
 
-    static func saveMock(path: String, response: String) {
+    public static func saveMock(path: String, response: String) {
         let entry = "\(path)\t\(response)\n"
         if let handle = FileHandle(forWritingAtPath: mockFile) {
             handle.seekToEndOfFile()
@@ -76,7 +76,7 @@ struct Config {
         }
     }
 
-    static func loadMocks() -> [String: String] {
+    public static func loadMocks() -> [String: String] {
         guard let content = try? String(contentsOfFile: mockFile, encoding: .utf8) else {
             return [:]
         }
@@ -91,7 +91,7 @@ struct Config {
         return mocks
     }
 
-    static func clearMocks() {
+    public static func clearMocks() {
         try? "".write(toFile: mockFile, atomically: true, encoding: .utf8)
     }
 }
