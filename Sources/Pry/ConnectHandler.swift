@@ -11,14 +11,18 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
     private enum State {
         case idle
         case beganConnecting
-        case awaitingEnd(connectResult: Channel, host: String, port: Int, intercept: Bool)
-        case awaitingConnection(pendingBytes: [NIOAny], host: String, port: Int, intercept: Bool)
+        case awaitingEnd(connectResult: Channel)
+        case awaitingConnection(pendingBytes: [NIOAny])
         case upgradeComplete(pendingBytes: [NIOAny])
         case upgradeFailed
     }
 
     private var state: State = .idle
     private let ca: CertificateAuthority?
+    // Stored as instance properties so all states can access them
+    private var connectHost: String = ""
+    private var connectPort: Int = 443
+    private var shouldIntercept: Bool = false
 
     init(ca: CertificateAuthority?) {
         self.ca = ca
@@ -30,22 +34,23 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
             handleInitialMessage(context: context, data: unwrapInboundIn(data), rawData: data)
 
         case .beganConnecting:
+            // .end arrives before TCP connect completes — common on fast networks
             if case .end = unwrapInboundIn(data) {
-                // We don't have state info yet at this point — this shouldn't happen
-                // because beganConnecting transitions immediately
+                state = .awaitingConnection(pendingBytes: [])
+                removeDecoder(context: context)
             }
 
-        case .awaitingEnd(let peerChannel, let host, let port, let intercept):
+        case .awaitingEnd(let peerChannel):
             if case .end = unwrapInboundIn(data) {
                 state = .upgradeComplete(pendingBytes: [])
                 removeDecoder(context: context)
-                performUpgrade(peerChannel: peerChannel, context: context, host: host, port: port, intercept: intercept)
+                performUpgrade(peerChannel: peerChannel, context: context)
             }
 
-        case .awaitingConnection(var pendingBytes, let host, let port, let intercept):
-            state = .awaitingConnection(pendingBytes: [], host: host, port: port, intercept: intercept)
+        case .awaitingConnection(var pendingBytes):
+            state = .awaitingConnection(pendingBytes: [])
             pendingBytes.append(data)
-            state = .awaitingConnection(pendingBytes: pendingBytes, host: host, port: port, intercept: intercept)
+            state = .awaitingConnection(pendingBytes: pendingBytes)
 
         case .upgradeComplete(var pendingBytes):
             state = .upgradeComplete(pendingBytes: [])
@@ -85,33 +90,35 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
         }
 
         let (host, port) = parseHostPort(head.uri)
-        let intercept = ca != nil && Watchlist.matches(host)
+        connectHost = host
+        connectPort = port
+        shouldIntercept = ca != nil && Watchlist.matches(host)
 
         state = .beganConnecting
-        connectTo(host: host, port: port, intercept: intercept, context: context)
+        connectTo(context: context)
     }
 
-    private func connectTo(host: String, port: Int, intercept: Bool, context: ChannelHandlerContext) {
+    private func connectTo(context: ChannelHandlerContext) {
         ClientBootstrap(group: context.eventLoop)
-            .connect(host: host, port: port)
+            .connect(host: connectHost, port: connectPort)
             .whenComplete { result in
                 switch result {
                 case .success(let channel):
-                    self.connectSucceeded(channel: channel, host: host, port: port, intercept: intercept, context: context)
+                    self.connectSucceeded(channel: channel, context: context)
                 case .failure(let error):
                     self.connectFailed(error: error, context: context)
                 }
             }
     }
 
-    private func connectSucceeded(channel: Channel, host: String, port: Int, intercept: Bool, context: ChannelHandlerContext) {
+    private func connectSucceeded(channel: Channel, context: ChannelHandlerContext) {
         switch state {
         case .beganConnecting:
-            state = .awaitingEnd(connectResult: channel, host: host, port: port, intercept: intercept)
+            state = .awaitingEnd(connectResult: channel)
 
-        case .awaitingConnection(let pendingBytes, _, _, _):
+        case .awaitingConnection(let pendingBytes):
             state = .upgradeComplete(pendingBytes: pendingBytes)
-            performUpgrade(peerChannel: channel, context: context, host: host, port: port, intercept: intercept)
+            performUpgrade(peerChannel: channel, context: context)
 
         default:
             channel.close(mode: .all, promise: nil)
@@ -130,7 +137,7 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
         }
     }
 
-    private func performUpgrade(peerChannel: Channel, context: ChannelHandlerContext, host: String, port: Int, intercept: Bool) {
+    private func performUpgrade(peerChannel: Channel, context: ChannelHandlerContext) {
         // Send 200 Connection Established
         let headers = HTTPHeaders([("Content-Length", "0")])
         let head = HTTPResponseHead(version: .init(major: 1, minor: 1), status: .ok, headers: headers)
@@ -140,35 +147,39 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
         // Remove HTTP encoder
         removeEncoder(context: context)
 
-        if intercept {
-            setupInterception(peerChannel: peerChannel, context: context, host: host, port: port)
+        if shouldIntercept {
+            setupInterception(peerChannel: peerChannel, context: context)
         } else {
-            setupTunnel(peerChannel: peerChannel, context: context, host: host)
+            setupTunnel(peerChannel: peerChannel, context: context)
         }
     }
 
-    private func setupTunnel(peerChannel: Channel, context: ChannelHandlerContext, host: String) {
-        print("--- TUNNEL \(host) (passthrough)")
-        Config.appendLog("TUNNEL \(host)")
+    private func setupTunnel(peerChannel: Channel, context: ChannelHandlerContext) {
+        print("--- TUNNEL \(connectHost) (passthrough)")
+        Config.appendLog("TUNNEL \(connectHost)")
 
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
         do {
-            // Remove HTTPInterceptor if present
+            // Remove HTTPInterceptor — MUST succeed or TLS bytes get parsed as HTTP
             if let interceptor = try? context.pipeline.syncOperations.handler(type: HTTPInterceptor.self) {
-                try context.pipeline.syncOperations.removeHandler(interceptor)
+                context.pipeline.syncOperations.removeHandler(interceptor, promise: nil)
             }
             try context.pipeline.syncOperations.addHandler(localGlue)
             try peerChannel.pipeline.syncOperations.addHandler(peerGlue)
+            // Remove self last — this forwards any pending bytes via removeHandler()
             context.pipeline.syncOperations.removeHandler(self, promise: nil)
         } catch {
+            print("!!! Tunnel setup failed for \(connectHost): \(error)")
             peerChannel.close(mode: .all, promise: nil)
             context.close(promise: nil)
         }
     }
 
-    private func setupInterception(peerChannel: Channel, context: ChannelHandlerContext, host: String, port: Int) {
+    private func setupInterception(peerChannel: Channel, context: ChannelHandlerContext) {
+        let host = connectHost
+        let port = connectPort
         guard let ca = ca else {
-            setupTunnel(peerChannel: peerChannel, context: context, host: host)
+            setupTunnel(peerChannel: peerChannel, context: context)
             return
         }
 
