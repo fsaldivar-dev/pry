@@ -243,6 +243,9 @@ public class TUI {
                     commandBuffer = "/"
                     renderCommandLine()
                     return
+                case "b":
+                    resumeSelectedBreakpoint()
+                    return
                 default:
                     break
                 }
@@ -309,6 +312,26 @@ public class TUI {
         needsFullRedraw = true
         DispatchQueue.global().async {
             RequestRepeater.repeat_(request: req, proxyPort: self.port)
+        }
+    }
+
+    private func resumeSelectedBreakpoint() {
+        let requests = getFilteredRequests()
+        guard selectedIndex < requests.count else { return }
+        let req = requests[selectedIndex]
+
+        let manager = RequestBreakpointManager.shared
+        let paused = manager.getPaused()
+        if let _ = paused.first(where: { $0.id == req.id }) {
+            manager.resume(id: req.id, action: .resume)
+            statusMessage = "▶ Resumed request \(req.method) \(req.url)"
+        } else {
+            statusMessage = "No breakpoint on this request"
+        }
+        needsFullRedraw = true
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.statusMessage = nil
+            self?.needsFullRedraw = true
         }
     }
 
@@ -484,7 +507,11 @@ public class TUI {
 
                 // Status indicator
                 let statusIcon: String
-                if req.isMock { statusIcon = "🟡" }
+                let isPaused = RequestBreakpointManager.shared.getPaused().contains { $0.id == req.id }
+                if isPaused { statusIcon = "⏸️" }
+                else if req.isPinned { statusIcon = "📌" }
+                else if req.isWebSocket { statusIcon = "🔌" }
+                else if req.isMock { statusIcon = "🟡" }
                 else if req.isTunnel { statusIcon = "🔒" }
                 else if let code = req.statusCode {
                     statusIcon = code < 400 ? "🟢" : "🔴"

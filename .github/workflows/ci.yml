@@ -25,6 +25,9 @@ jobs:
       - name: Build
         run: swift build
 
+      - name: Test
+        run: swift test
+
       - name: Build Release
         run: swift build -c release
 
@@ -141,6 +144,9 @@ jobs:
 
       - name: Build
         run: swift build
+
+      - name: Test
+        run: swift test
 
       - name: Build Release
         run: swift build -c release

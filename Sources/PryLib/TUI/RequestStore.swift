@@ -24,13 +24,17 @@ public class RequestStore {
         public var responseBody: String?
         public var isMock: Bool = false
         public var isTunnel: Bool = false
+        public var isPinned: Bool = false
+        public var isWebSocket: Bool = false
+        public var wsFrames: [WSFrame] = []
 
-        public init(id: Int = 0, timestamp: Date = Date(), method: String, url: String, host: String, appIcon: String, appName: String, requestHeaders: [(String, String)] = [], requestBody: String? = nil, statusCode: UInt? = nil, responseHeaders: [(String, String)] = [], responseBody: String? = nil, isMock: Bool = false, isTunnel: Bool = false) {
+        public init(id: Int = 0, timestamp: Date = Date(), method: String, url: String, host: String, appIcon: String, appName: String, requestHeaders: [(String, String)] = [], requestBody: String? = nil, statusCode: UInt? = nil, responseHeaders: [(String, String)] = [], responseBody: String? = nil, isMock: Bool = false, isTunnel: Bool = false, isPinned: Bool = false) {
             self.id = id; self.timestamp = timestamp; self.method = method; self.url = url
             self.host = host; self.appIcon = appIcon; self.appName = appName
             self.requestHeaders = requestHeaders; self.requestBody = requestBody
             self.statusCode = statusCode; self.responseHeaders = responseHeaders
             self.responseBody = responseBody; self.isMock = isMock; self.isTunnel = isTunnel
+            self.isPinned = isPinned
         }
     }
 
@@ -108,6 +112,33 @@ public class RequestStore {
 
     func clear() {
         queue.sync { entries.removeAll() }
+        onChange?()
+    }
+
+    func markWebSocket(id: Int) {
+        queue.sync {
+            if let idx = entries.firstIndex(where: { $0.id == id }) {
+                entries[idx].isWebSocket = true
+            }
+        }
+        onChange?()
+    }
+
+    func addWSFrame(requestId: Int, frame: WSFrame) {
+        queue.sync {
+            if let idx = entries.firstIndex(where: { $0.id == requestId }) {
+                entries[idx].wsFrames.append(frame)
+            }
+        }
+        onChange?()
+    }
+
+    func markPinned(id: Int) {
+        queue.sync {
+            if let idx = entries.firstIndex(where: { $0.id == id }) {
+                entries[idx].isPinned = true
+            }
+        }
         onChange?()
     }
 
