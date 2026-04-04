@@ -372,6 +372,17 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
             }
         }
 
+        // Rule Engine: apply scripting rules
+        let matchingRules = RuleEngine.matchingRules(for: head.uri, method: "\(head.method)")
+        if !matchingRules.isEmpty {
+            var ruleHeaders = head.headers.map { ($0.name, $0.value) }
+            let ruleResult = RuleEngine.applyRequestRules(rules: matchingRules, headers: &ruleHeaders)
+            if ruleResult.shouldDrop {
+                context.close(promise: nil)
+                return
+            }
+        }
+
         // No-cache: strip caching headers
         var forwardingHead = head
         if Config.get("nocache") == "true" {
