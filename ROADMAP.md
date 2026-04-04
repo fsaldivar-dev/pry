@@ -14,22 +14,31 @@
 - [x] `pry trust` — instalar CA en Simulator
 - [x] HTTPS tunneling (GlueHandler + state machine fix)
 - [x] TLS interception (MITM pipeline)
-- [ ] Detección de certificate pinning
+- [x] Detección de certificate pinning
 
-## v0.3 — Testing & Quality
-- [ ] Separar en PryLib + Pry (library + executable)
-- [ ] Unit tests para Watchlist, Config, MockHandler
+## v0.3 — Testing & Quality ✅
+- [x] Separar en PryLib + Pry (library + executable)
+- [x] Unit tests (Watchlist, Config, RequestStore, CurlGenerator, AppIdentifier, ProxyError, BreakpointStore, WSFrame, ProjectScanner, CertPinning)
+- [x] CI con `swift test` (macOS + Linux)
 - [ ] Integration tests con proxy real
-- [ ] CI con swift test
 
-## v0.4 — Developer Experience
-- [ ] `pry init` — genera .prywatch desde el proyecto
-- [ ] Colores en stdout (request verde, response azul, error rojo)
-- [ ] Request/response body preview (truncado)
-- [ ] Export log a HAR format
+## v0.4 — Developer Experience ✅
+- [x] TUI interactiva (3 paneles, keybindings, filtros, búsqueda)
+- [x] Colores en stdout (Colors.swift, ANSI.swift)
+- [x] Request/response body preview (BodyPrinter)
+- [x] Copiar request como cURL (CurlGenerator)
+- [x] Identificación de apps por User-Agent (AppIdentifier)
+- [x] Modo headless (`--headless`)
+- [x] `pry init` — genera .prywatch desde el proyecto
+
+## v0.5 — Advanced Features ✅
+- [x] WebSocket interception (RFC 6455 frame parsing)
+- [x] Breakpoints (pausar y modificar requests)
+- [x] Homebrew formula
 
 ## Futuro
-- [ ] WebSocket interception
-- [ ] Breakpoints (pausar y modificar requests)
+- [ ] Export log a HAR format
+- [ ] Header rewrite (`pry header add/remove`)
+- [ ] Map local (`pry map REGEX FILE`)
+- [ ] Request replay desde CLI
 - [ ] Integración con AutoPilot
-- [ ] Homebrew formula
