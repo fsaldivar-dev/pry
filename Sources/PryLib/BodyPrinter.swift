@@ -107,13 +107,89 @@ public struct BodyPrinter {
         guard let obj = try? JSONSerialization.jsonObject(with: data),
               let pretty = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
               let str = String(data: pretty, encoding: .utf8) else { return nil }
-        let lines = str.split(separator: "\n", omittingEmptySubsequences: false)
+        let colorized = colorizeJSON(str)
+        let lines = colorized.split(separator: "\n", omittingEmptySubsequences: false)
         if lines.count > 1 {
             return lines.enumerated().map { i, line in
                 i == 0 ? String(line) : "          \(line)"
             }.joined(separator: "\n")
         }
-        return str
+        return colorized
+    }
+
+    public static func colorizeJSON(_ json: String) -> String {
+        var result = ""
+        var inString = false
+        var isKey = true
+        var escaped = false
+        var i = json.startIndex
+
+        while i < json.endIndex {
+            let c = json[i]
+
+            if escaped {
+                result.append(c)
+                escaped = false
+                i = json.index(after: i)
+                continue
+            }
+
+            if c == "\\" && inString {
+                escaped = true
+                result.append(c)
+                i = json.index(after: i)
+                continue
+            }
+
+            if c == "\"" {
+                if !inString {
+                    inString = true
+                    let color = isKey ? "\u{001B}[36m" : "\u{001B}[32m"
+                    result += color + "\""
+                } else {
+                    inString = false
+                    result += "\"\u{001B}[0m"
+                }
+            } else if inString {
+                result.append(c)
+            } else if c == ":" {
+                isKey = false
+                result.append(c)
+            } else if c == "," || c == "{" || c == "[" {
+                isKey = (c == "," || c == "{")
+                result.append(c)
+            } else if c.isNumber || c == "-" {
+                result += "\u{001B}[33m"
+                result.append(c)
+                var next = json.index(after: i)
+                while next < json.endIndex {
+                    let nc = json[next]
+                    if nc.isNumber || nc == "." || nc == "e" || nc == "E" || nc == "+" || nc == "-" {
+                        result.append(nc)
+                        next = json.index(after: next)
+                    } else { break }
+                }
+                result += "\u{001B}[0m"
+                i = next
+                continue
+            } else if json[i...].hasPrefix("true") {
+                result += "\u{001B}[34mtrue\u{001B}[0m"
+                i = json.index(i, offsetBy: 4)
+                continue
+            } else if json[i...].hasPrefix("false") {
+                result += "\u{001B}[34mfalse\u{001B}[0m"
+                i = json.index(i, offsetBy: 5)
+                continue
+            } else if json[i...].hasPrefix("null") {
+                result += "\u{001B}[90mnull\u{001B}[0m"
+                i = json.index(i, offsetBy: 4)
+                continue
+            } else {
+                result.append(c)
+            }
+            i = json.index(after: i)
+        }
+        return result
     }
 }
 
