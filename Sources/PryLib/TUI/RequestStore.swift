@@ -9,7 +9,59 @@ public class RequestStore {
     private let maxEntries = 500
     var onChange: (() -> Void)?
 
-    public struct CapturedRequest {
+    private struct CodableHeader: Codable {
+        let name: String
+        let value: String
+    }
+
+    public struct CapturedRequest: Codable {
+        enum CodingKeys: String, CodingKey {
+            case id, timestamp, method, url, host, appIcon, appName
+            case requestHeaders, requestBody, statusCode
+            case responseHeaders, responseBody
+            case isMock, isTunnel, isPinned, isWebSocket
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(id, forKey: .id)
+            try c.encode(timestamp, forKey: .timestamp)
+            try c.encode(method, forKey: .method)
+            try c.encode(url, forKey: .url)
+            try c.encode(host, forKey: .host)
+            try c.encode(appIcon, forKey: .appIcon)
+            try c.encode(appName, forKey: .appName)
+            try c.encode(requestHeaders.map { CodableHeader(name: $0.0, value: $0.1) }, forKey: .requestHeaders)
+            try c.encode(requestBody, forKey: .requestBody)
+            try c.encode(statusCode, forKey: .statusCode)
+            try c.encode(responseHeaders.map { CodableHeader(name: $0.0, value: $0.1) }, forKey: .responseHeaders)
+            try c.encode(responseBody, forKey: .responseBody)
+            try c.encode(isMock, forKey: .isMock)
+            try c.encode(isTunnel, forKey: .isTunnel)
+            try c.encode(isPinned, forKey: .isPinned)
+            try c.encode(isWebSocket, forKey: .isWebSocket)
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(Int.self, forKey: .id)
+            timestamp = try c.decode(Date.self, forKey: .timestamp)
+            method = try c.decode(String.self, forKey: .method)
+            url = try c.decode(String.self, forKey: .url)
+            host = try c.decode(String.self, forKey: .host)
+            appIcon = try c.decode(String.self, forKey: .appIcon)
+            appName = try c.decode(String.self, forKey: .appName)
+            requestHeaders = try c.decode([CodableHeader].self, forKey: .requestHeaders).map { ($0.name, $0.value) }
+            requestBody = try c.decodeIfPresent(String.self, forKey: .requestBody)
+            statusCode = try c.decodeIfPresent(UInt.self, forKey: .statusCode)
+            responseHeaders = try c.decode([CodableHeader].self, forKey: .responseHeaders).map { ($0.name, $0.value) }
+            responseBody = try c.decodeIfPresent(String.self, forKey: .responseBody)
+            isMock = try c.decodeIfPresent(Bool.self, forKey: .isMock) ?? false
+            isTunnel = try c.decodeIfPresent(Bool.self, forKey: .isTunnel) ?? false
+            isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+            isWebSocket = try c.decodeIfPresent(Bool.self, forKey: .isWebSocket) ?? false
+        }
+
         public let id: Int
         public let timestamp: Date
         public let method: String
@@ -98,20 +150,31 @@ public class RequestStore {
         onChange?()
     }
 
-    func getAll() -> [CapturedRequest] {
+    public func getAll() -> [CapturedRequest] {
         queue.sync { entries }
     }
 
-    func get(id: Int) -> CapturedRequest? {
+    public func get(id: Int) -> CapturedRequest? {
         queue.sync { entries.first(where: { $0.id == id }) }
     }
 
-    func count() -> Int {
+    public func count() -> Int {
         queue.sync { entries.count }
     }
 
     func clear() {
-        queue.sync { entries.removeAll() }
+        queue.sync {
+            entries.removeAll()
+            nextId = 1
+        }
+        onChange?()
+    }
+
+    func loadEntries(_ loaded: [CapturedRequest]) {
+        queue.sync {
+            entries = loaded
+            nextId = (loaded.map { $0.id }.max() ?? 0) + 1
+        }
         onChange?()
     }
 

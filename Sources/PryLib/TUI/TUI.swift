@@ -15,6 +15,8 @@ public class TUI {
 
     // Navigation
     private var selectedIndex: Int = 0
+    private var codeGenIndex: Int = 0
+    private let codeGenFormats = ["curl", "swift", "python"]
     private var listScrollOffset: Int = 0
     private var showMocks = false
 
@@ -246,6 +248,12 @@ public class TUI {
                 case "b":
                     resumeSelectedBreakpoint()
                     return
+                case "g":
+                    cycleCodeGenFormat()
+                    return
+                case "d":
+                    diffWithPrevious()
+                    return
                 default:
                     break
                 }
@@ -289,9 +297,15 @@ public class TUI {
         guard selectedIndex < requests.count else { return }
         let req = requests[selectedIndex]
         let https = Watchlist.matches(req.host)
-        let curl = CurlGenerator.generate(from: req, https: https)
-        if CurlGenerator.copyToClipboard(curl) {
-            statusMessage = "✓ Copied to clipboard"
+        let code: String
+        let format = codeGenFormats[codeGenIndex]
+        switch format {
+        case "swift": code = SwiftGenerator.generate(from: req, https: https)
+        case "python": code = PythonGenerator.generate(from: req, https: https)
+        default: code = CurlGenerator.generate(from: req, https: https)
+        }
+        if CurlGenerator.copyToClipboard(code) {
+            statusMessage = "✓ Copied as \(format)"
         } else {
             statusMessage = "✗ Copy failed"
         }
@@ -327,6 +341,39 @@ public class TUI {
             statusMessage = "▶ Resumed request \(req.method) \(req.url)"
         } else {
             statusMessage = "No breakpoint on this request"
+        }
+        needsFullRedraw = true
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.statusMessage = nil
+            self?.needsFullRedraw = true
+        }
+    }
+
+    private func cycleCodeGenFormat() {
+        codeGenIndex = (codeGenIndex + 1) % codeGenFormats.count
+        statusMessage = "Code gen: \(codeGenFormats[codeGenIndex])"
+        needsFullRedraw = true
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.statusMessage = nil
+            self?.needsFullRedraw = true
+        }
+    }
+
+    private func diffWithPrevious() {
+        let requests = getFilteredRequests()
+        guard selectedIndex > 0, selectedIndex < requests.count else {
+            statusMessage = "Select a request (not the first) to diff"
+            needsFullRedraw = true
+            return
+        }
+        let req1 = requests[selectedIndex - 1]
+        let req2 = requests[selectedIndex]
+        let diffLines = DiffTool.diff(req1: req1, req2: req2)
+        let formatted = DiffTool.format(diffLines)
+        if CurlGenerator.copyToClipboard(formatted) {
+            statusMessage = "Diff copied to clipboard"
+        } else {
+            statusMessage = "Diff copy failed"
         }
         needsFullRedraw = true
         DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in

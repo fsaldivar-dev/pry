@@ -36,6 +36,21 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
     private func handleRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?) {
         let (host, port, path) = extractTarget(from: head)
 
+        // Block list check
+        if BlockList.isBlocked(host) {
+            OutputBroker.shared.log(errText("🚫 BLOCKED \(host)"), type: .error)
+            var headers = HTTPHeaders()
+            headers.add(name: "Content-Type", value: "application/json")
+            headers.add(name: "Connection", value: "close")
+            let responseHead = HTTPResponseHead(version: .http1_1, status: .forbidden, headers: headers)
+            context.write(wrapOutboundOut(.head(responseHead)), promise: nil)
+            var buffer = context.channel.allocator.buffer(capacity: 0)
+            buffer.writeString("{\"error\":\"blocked by Pry\"}")
+            context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+            context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
+            return
+        }
+
         // Filter check
         if let filter = filter, !host.contains(filter) {
             forwardRequest(context: context, host: host, port: port, head: head, body: body)
@@ -94,8 +109,28 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         let rewrittenHeaders = HeaderRewrite.apply(to: head.headers.map { ($0.name, $0.value) })
         rewrittenHead.headers = .init(rewrittenHeaders.map { (name: $0.0, value: $0.1) })
 
+        // No-cache: strip caching headers and add no-store
+        if Config.get("nocache") == "true" {
+            rewrittenHead.headers.replaceOrAdd(name: "Cache-Control", value: "no-store, no-cache")
+            rewrittenHead.headers.replaceOrAdd(name: "Pragma", value: "no-cache")
+            rewrittenHead.headers.remove(name: "If-None-Match")
+            rewrittenHead.headers.remove(name: "If-Modified-Since")
+        }
+
+        // Map Remote: redirect to different host
+        var connectHost = host
+        if let remapped = MapRemote.match(host: host) {
+            connectHost = remapped
+            OutputBroker.shared.log(info(">>> REDIRECT \(host) → \(remapped)"), type: .info)
+        }
+
+        // DNS Spoofing: override IP resolution
+        if let spoofedIP = DNSSpoofing.resolve(connectHost) {
+            connectHost = spoofedIP
+        }
+
         // Forward to real server
-        forwardRequest(context: context, host: host, port: port, head: rewrittenHead, body: body, requestId: requestId)
+        forwardRequest(context: context, host: host, port: port, head: rewrittenHead, body: body, requestId: requestId, connectHost: connectHost)
     }
 
     private func continueAfterBreakpoint(context: ChannelHandlerContext, host: String, port: Int, path: String, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int) {
@@ -147,9 +182,10 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         context.close(promise: nil)
     }
 
-    private func forwardRequest(context: ChannelHandlerContext, host: String, port: Int, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int = 0) {
+    private func forwardRequest(context: ChannelHandlerContext, host: String, port: Int, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int = 0, connectHost: String? = nil) {
         let clientChannel = context.channel
         let group = context.eventLoop
+        let targetHost = connectHost ?? host
 
         ClientBootstrap(group: group)
             .channelInitializer { channel in
@@ -157,7 +193,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
                     channel.pipeline.addHandler(ResponseForwarder(clientChannel: clientChannel, host: host, requestId: requestId))
                 }
             }
-            .connect(host: host, port: port)
+            .connect(host: targetHost, port: port)
             .whenComplete { result in
                 switch result {
                 case .success(let remoteChannel):

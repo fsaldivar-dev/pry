@@ -90,6 +90,19 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
         }
 
         let (host, port) = parseHostPort(head.uri)
+
+        // Block list check
+        if BlockList.isBlocked(host) {
+            OutputBroker.shared.log(errText("🚫 BLOCKED \(host)"), type: .error)
+            let headers = HTTPHeaders([("Content-Length", "0"), ("Connection", "close")])
+            let head = HTTPResponseHead(version: .init(major: 1, minor: 1), status: .forbidden, headers: headers)
+            context.write(wrapOutboundOut(.head(head)), promise: nil)
+            context.writeAndFlush(wrapOutboundOut(.end(nil))).whenComplete { _ in
+                context.close(mode: .output, promise: nil)
+            }
+            return
+        }
+
         connectHost = host
         connectPort = port
         shouldIntercept = ca != nil && Watchlist.matches(host)
@@ -359,6 +372,25 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
             }
         }
 
+        // No-cache: strip caching headers
+        var forwardingHead = head
+        if Config.get("nocache") == "true" {
+            forwardingHead.headers.replaceOrAdd(name: "Cache-Control", value: "no-store, no-cache")
+            forwardingHead.headers.replaceOrAdd(name: "Pragma", value: "no-cache")
+            forwardingHead.headers.remove(name: "If-None-Match")
+            forwardingHead.headers.remove(name: "If-Modified-Since")
+        }
+
+        // Map Remote + DNS Spoofing
+        var connectHost = self.host
+        if let remapped = MapRemote.match(host: self.host) {
+            connectHost = remapped
+            OutputBroker.shared.log(info(">>> REDIRECT \(self.host) → \(remapped)"), type: .info)
+        }
+        if let spoofedIP = DNSSpoofing.resolve(connectHost) {
+            connectHost = spoofedIP
+        }
+
         // Forward to real server via TLS
         do {
             let tlsConfig = TLSConfiguration.makeClientConfiguration()
@@ -373,7 +405,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                         channel.pipeline.addHandler(TLSResponseForwarder(clientChannel: context.channel, host: self.host))
                     }
                 }
-                .connect(host: host, port: port)
+                .connect(host: connectHost, port: port)
                 .whenComplete { result in
                     switch result {
                     case .success(let remoteChannel):
