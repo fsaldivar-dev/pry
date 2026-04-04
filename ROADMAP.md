@@ -35,10 +35,27 @@
 - [x] WebSocket interception (RFC 6455 frame parsing)
 - [x] Breakpoints (pausar y modificar requests)
 - [x] Homebrew formula
+- [x] Export HAR 1.2 (`pry export har`)
+- [x] Header rewrite (`pry header add/remove`)
+- [x] Map local (`pry map REGEX FILE`)
+- [x] Map remote / redirects (`pry redirect SRC DST`)
+- [x] Block list (`pry block DOMAIN` — responde 403)
+- [x] DNS override (`pry dns DOMAIN IP`)
+- [x] No-cache toggle (`pry nocache on/off`)
+- [x] Request composer (`pry send METHOD URL`)
+- [x] Session save/load (`pry save`/`pry load`)
+- [x] Diff de requests (`pry diff ID1 ID2`)
+- [x] Request repeat desde TUI (`r`)
+- [x] Code generation: curl/swift/python (`g` en TUI)
+- [x] TUI keybindings: diff (`d`), resume breakpoint (`b`)
 
-## Futuro
-- [ ] Export log a HAR format
-- [ ] Header rewrite (`pry header add/remove`)
-- [ ] Map local (`pry map REGEX FILE`)
-- [ ] Request replay desde CLI
-- [ ] Integración con AutoPilot
+## v0.6 — Scripting DSL (planificado)
+- [ ] DSL para scripts de automatizacion (intercept, modify, replay)
+- [ ] Integracion con GraphQL viewer
+- [ ] Import HAR (`pry import FILE`)
+
+## v0.7 — Networking avanzado (futuro)
+- [ ] Network throttling (simular 3G, latencia)
+- [ ] SOCKS proxy
+- [ ] Reverse proxy (`--reverse URL`)
+- [ ] Integracion con AutoPilot

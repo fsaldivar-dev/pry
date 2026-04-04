@@ -26,6 +26,7 @@ Sources/PryLib/
 ├── ConnectHandler.swift      → CONNECT method, tunnel vs intercept
 ├── GlueHandler.swift         → Bidirectional byte forwarding (tunnel)
 ├── CertificateAuthority.swift → CA generation, cert cache
+├── CertificatePinningDetector.swift → Deteccion de cert pinning
 ├── Watchlist.swift           → .prywatch domains management
 ├── Config.swift              → .pryconfig, logging, PID, mocks
 ├── ProxyError.swift          → Errores tipados
@@ -33,8 +34,23 @@ Sources/PryLib/
 ├── BodyPrinter.swift         → Pretty-print de request/response bodies
 ├── AppIdentifier.swift       → Identifica apps por User-Agent
 ├── Colors.swift              → ANSI color helpers
+├── BlockList.swift           → Dominios bloqueados (403)
+├── MapLocal.swift            → Map URL regex a archivo local
+├── MapRemote.swift           → Redirect de hosts (map remote)
+├── HeaderRewrite.swift       → Reglas de rewrite de headers
+├── HARExporter.swift         → Export trafico como HAR 1.2
+├── DNSSpoofing.swift         → DNS override (dominio → IP)
+├── DiffTool.swift            → Comparacion de requests (diff)
+├── RequestComposer.swift     → Componer y enviar requests
+├── SessionManager.swift      → Save/load sesiones capturadas
+├── RequestRepeater.swift     → Repetir requests desde TUI
+├── BreakpointStore.swift     → Almacen de breakpoints
+├── RequestBreakpoint.swift   → Logica de breakpoints en requests
+├── ProjectScanner.swift      → Escanea proyecto para pry init
+├── WSFrame.swift             → WebSocket frame parsing (RFC 6455)
+├── WebSocketInterceptor.swift → Intercepcion de WebSocket
 ├── TUI/
-│   ├── TUI.swift             → TUI interactiva (3 paneles, keybindings)
+│   ├── TUI.swift             → TUI interactiva (3 paneles, keybindings, code gen)
 │   ├── RequestStore.swift    → Almacen de requests capturados en memoria
 │   ├── OutputBroker.swift    → Coordinacion de output TUI/headless
 │   ├── ANSI.swift            → Secuencias de control de terminal
@@ -101,6 +117,24 @@ pry ca                      # Info del CA certificate
 pry break PATTERN           # Breakpoint en URL pattern
 pry breaks [clear]          # Lista/limpia breakpoints
 pry init [DIR]              # Escanea proyecto para .prywatch
+pry nocache on|off          # Toggle no-cache headers
+pry block DOMAIN            # Bloquea dominio (responde 403)
+pry blocks [clear]          # Lista/limpia dominios bloqueados
+pry redirect SRC DST        # Redirige host a otro host
+pry redirects [clear]       # Lista/limpia redirects
+pry dns DOMAIN IP           # Override DNS (dominio → IP)
+pry dns list                # Lista DNS overrides
+pry dns clear               # Limpia DNS overrides
+pry send METHOD URL         # Componer y enviar request
+pry save FILE               # Guardar sesion capturada
+pry load FILE               # Cargar sesion guardada
+pry diff ID1 ID2            # Comparar dos requests capturados
+pry export har FILE         # Exportar trafico como HAR 1.2
+pry map REGEX FILE          # Map URL regex a archivo local
+pry maps [clear]            # Lista/limpia maps
+pry header add NAME VALUE   # Agregar header a todos los requests
+pry header remove NAME      # Eliminar header de todos los requests
+pry headers [clear]         # Lista/limpia reglas de headers
 ```
 
 ### Flags
