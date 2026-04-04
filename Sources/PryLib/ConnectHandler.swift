@@ -178,6 +178,9 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
             if let interceptor = try? context.pipeline.syncOperations.handler(type: HTTPInterceptor.self) {
                 context.pipeline.syncOperations.removeHandler(interceptor, promise: nil)
             }
+            if let throttle = NetworkThrottle.current {
+                try context.pipeline.syncOperations.addHandler(ThrottleHandler(config: throttle))
+            }
             try context.pipeline.syncOperations.addHandler(localGlue)
             try peerChannel.pipeline.syncOperations.addHandler(peerGlue)
             // Remove self last — this forwards any pending bytes via removeHandler()
