@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public struct RequestComposer {
     /// Build a URLRequest (testable, no side effects)
@@ -22,11 +25,19 @@ public struct RequestComposer {
             return
         }
         let config = URLSessionConfiguration.default
+        #if canImport(Darwin)
         config.connectionProxyDictionary = [
             kCFNetworkProxiesHTTPEnable: true,
             kCFNetworkProxiesHTTPProxy: "127.0.0.1",
             kCFNetworkProxiesHTTPPort: proxyPort
         ]
+        #else
+        config.connectionProxyDictionary = [
+            "HTTPEnable": true,
+            "HTTPProxy": "127.0.0.1",
+            "HTTPPort": proxyPort
+        ]
+        #endif
         let session = URLSession(configuration: config)
         let semaphore = DispatchSemaphore(value: 0)
 
