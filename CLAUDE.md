@@ -18,16 +18,27 @@
 
 ```
 Sources/Pry/
-├── main.swift              → Entry point, command dispatch
-├── ProxyServer.swift       → ServerBootstrap, lifecycle
-├── HTTPInterceptor.swift   → Captura HTTP requests, forwarding
-├── ConnectHandler.swift    → CONNECT method, tunnel vs intercept
-├── GlueHandler.swift       → Bidirectional byte forwarding (tunnel)
+├── main.swift                → Entry point, command dispatch
+
+Sources/PryLib/
+├── ProxyServer.swift         → ServerBootstrap, lifecycle
+├── HTTPInterceptor.swift     → Captura HTTP requests, forwarding
+├── ConnectHandler.swift      → CONNECT method, tunnel vs intercept
+├── GlueHandler.swift         → Bidirectional byte forwarding (tunnel)
 ├── CertificateAuthority.swift → CA generation, cert cache
-├── Watchlist.swift         → .prywatch domains management
-├── MockHandler.swift       → Mock responses por path
-├── Config.swift            → .pryconfig, logging, PID
-├── ProxyError.swift        → Errores tipados
+├── Watchlist.swift           → .prywatch domains management
+├── Config.swift              → .pryconfig, logging, PID, mocks
+├── ProxyError.swift          → Errores tipados
+├── CurlGenerator.swift       → Genera comandos curl desde requests
+├── BodyPrinter.swift         → Pretty-print de request/response bodies
+├── AppIdentifier.swift       → Identifica apps por User-Agent
+├── Colors.swift              → ANSI color helpers
+├── TUI/
+│   ├── TUI.swift             → TUI interactiva (3 paneles, keybindings)
+│   ├── RequestStore.swift    → Almacen de requests capturados en memoria
+│   ├── OutputBroker.swift    → Coordinacion de output TUI/headless
+│   ├── ANSI.swift            → Secuencias de control de terminal
+│   └── Terminal.swift        → Raw mode management
 ```
 
 ## Workflow de desarrollo
@@ -84,8 +95,18 @@ pry mock PATH JSON          # Registra mock
 pry mocks [clear]           # Lista/limpia mocks
 pry log [clear]             # Muestra/limpia log
 pry watch PATTERN           # Filtra trafico por dominio
+pry watch clear             # Limpia filtro
 pry trust                   # Instala CA en iOS Simulator
 pry ca                      # Info del CA certificate
+pry break PATTERN           # Breakpoint en URL pattern
+pry breaks [clear]          # Lista/limpia breakpoints
+pry init [DIR]              # Escanea proyecto para .prywatch
+```
+
+### Flags
+```bash
+pry start --port PORT       # Puerto custom (default: 8080)
+pry start --headless        # Sin TUI, solo logging a stdout
 ```
 
 ## Testing

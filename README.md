@@ -59,8 +59,16 @@ Documentamos todo el proceso — los errores, los callejones sin salida, las dec
 
 <h2 id="inicio-rápido">Inicio rápido</h2>
 
+### Homebrew (recomendado)
+
 ```bash
-# Compilar
+brew tap fsaldivar-dev/pry
+brew install pry
+```
+
+### Desde fuente
+
+```bash
 swift build -c release
 cp .build/release/pry /usr/local/bin/pry
 
@@ -100,6 +108,45 @@ pry start
 pry log          # Historial de requests
 pry list         # Dominios interceptados
 pry mocks        # Mocks activos
+```
+
+### TUI interactiva
+
+Al ejecutar `pry start`, se abre una interfaz interactiva en terminal con 3 paneles: lista de requests, detalle, y response body.
+
+```bash
+pry start              # TUI interactiva (default)
+pry start --headless   # Sin TUI, solo logging a stdout
+pry start --port 9090  # Puerto custom
+```
+
+**Keybindings:**
+
+| Tecla | Acción |
+|-------|--------|
+| `↑` `↓` | Navegar requests |
+| `c` | Copiar request como cURL al clipboard |
+| `f` | Ciclar filtros (GET → POST → PUT → DELETE → 2xx → 4xx → 5xx) |
+| `/` | Buscar por URL, host, método o body |
+| `Tab` | Alternar entre requests y mocks activos |
+| `Esc` | Limpiar filtro/búsqueda |
+| `q` | Salir |
+
+**Indicadores:**
+
+| Icono | Significado |
+|-------|-------------|
+| 🟢 | Respuesta exitosa (2xx) |
+| 🔴 | Error (4xx/5xx) |
+| 🟡 | Respuesta mockeada |
+| 🔒 | Túnel HTTPS (no interceptado) |
+| ⏳ | Esperando respuesta |
+
+### Filtrar tráfico
+
+```bash
+pry watch api.myapp.com   # Solo mostrar tráfico de este dominio
+pry watch clear           # Limpiar filtro
 ```
 
 ---

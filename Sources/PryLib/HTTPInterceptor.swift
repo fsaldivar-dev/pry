@@ -48,6 +48,35 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         BodyPrinter.printRequestBody(body)
         Config.appendLog(logEntry)
 
+        // Breakpoint check
+        if BreakpointStore.shared.shouldBreak(url: head.uri, host: host) {
+            RequestStore.shared.updateResponse(id: requestId, statusCode: 0, headers: [], body: "⏸️ Paused at breakpoint")
+            let future = RequestBreakpointManager.shared.pause(id: requestId, head: head, body: body, host: host, eventLoop: context.eventLoop)
+            future.whenSuccess { [self] action in
+                switch action {
+                case .resume:
+                    self.continueAfterBreakpoint(context: context, host: host, port: port, path: path, head: head, body: body, requestId: requestId)
+                case .modify(let newHeaders, let newBody):
+                    var modifiedHead = head
+                    if let headers = newHeaders {
+                        for (name, value) in headers {
+                            modifiedHead.headers.replaceOrAdd(name: name, value: value)
+                        }
+                    }
+                    var modifiedBody = body
+                    if let bodyStr = newBody {
+                        var buf = context.channel.allocator.buffer(capacity: bodyStr.utf8.count)
+                        buf.writeString(bodyStr)
+                        modifiedBody = buf
+                    }
+                    self.continueAfterBreakpoint(context: context, host: host, port: port, path: path, head: modifiedHead, body: modifiedBody, requestId: requestId)
+                case .cancel:
+                    context.close(promise: nil)
+                }
+            }
+            return
+        }
+
         // Mock check
         if let mockResponse = findMock(for: path, host: host) {
             respondWithMock(context: context, json: mockResponse, path: path, requestId: requestId)
@@ -67,6 +96,14 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
 
         // Forward to real server
         forwardRequest(context: context, host: host, port: port, head: rewrittenHead, body: body, requestId: requestId)
+    }
+
+    private func continueAfterBreakpoint(context: ChannelHandlerContext, host: String, port: Int, path: String, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int) {
+        if let mockResponse = findMock(for: path, host: host) {
+            respondWithMock(context: context, json: mockResponse, path: path, requestId: requestId)
+            return
+        }
+        forwardRequest(context: context, host: host, port: port, head: head, body: body, requestId: requestId)
     }
 
     private func findMock(for path: String, host: String) -> String? {
