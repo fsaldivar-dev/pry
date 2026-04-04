@@ -1,8 +1,8 @@
 class Pry < Formula
   desc "HTTP/HTTPS proxy CLI for iOS devs — Swift puro, un binario"
   homepage "https://github.com/fsaldivar-dev/pry"
-  url "https://github.com/fsaldivar-dev/pry/archive/refs/tags/v0.5.0.tar.gz"
-  sha256 ""  # Update with actual sha256 after release
+  url "https://github.com/fsaldivar-dev/pry/archive/refs/tags/v1.0.0.tar.gz"
+  sha256 "cdb4d771221f9dc855bfec3edee4dda5fa094307b5a97a724f780cde1d186109"
   license "MIT"
 
   depends_on xcode: ["14.0", :build]
