@@ -23,6 +23,10 @@ Documentamos todo — los errores, los intentos fallidos, las decisiones — par
 5. **[Alternativas](05-alternativas.md)** — mitmproxy, Proxyman, Charles, HTTP Toolkit — qué hacen bien y por qué elegimos otro camino
 6. **[Decisiones](06-decisiones.md)** — ADRs: por qué Swift, por qué SwiftNIO, por qué no wrappear mitmproxy
 7. **[Por qué es libre](07-por-que-es-libre.md)** — La deuda con el open source y por qué documentamos los fracasos
+8. **[La TUI](08-tui.md)** — Raw mode, ANSI escape sequences, tres paneles, dirty flags
+9. **[Features que nadie pidió](09-features-avanzadas.md)** — Mocks, breakpoints, export, el pipeline completo de interception
+10. **[Scripting sin scripting](10-scripting.md)** — DSL declarativo, throttling, GraphQL auto-detection
+11. **[La comparativa honesta](11-comparativa.md)** — Pry vs Proxyman vs mitmproxy — qué logramos y qué no
 
 ### Apéndices
 
