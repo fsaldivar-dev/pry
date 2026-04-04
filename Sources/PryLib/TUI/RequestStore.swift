@@ -19,7 +19,7 @@ public class RequestStore {
             case id, timestamp, method, url, host, appIcon, appName
             case requestHeaders, requestBody, statusCode
             case responseHeaders, responseBody
-            case isMock, isTunnel, isPinned, isWebSocket
+            case isMock, isTunnel, isPinned, isWebSocket, graphqlOperation
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -40,6 +40,7 @@ public class RequestStore {
             try c.encode(isTunnel, forKey: .isTunnel)
             try c.encode(isPinned, forKey: .isPinned)
             try c.encode(isWebSocket, forKey: .isWebSocket)
+            try c.encodeIfPresent(graphqlOperation, forKey: .graphqlOperation)
         }
 
         public init(from decoder: Decoder) throws {
@@ -60,6 +61,7 @@ public class RequestStore {
             isTunnel = try c.decodeIfPresent(Bool.self, forKey: .isTunnel) ?? false
             isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
             isWebSocket = try c.decodeIfPresent(Bool.self, forKey: .isWebSocket) ?? false
+            graphqlOperation = try c.decodeIfPresent(String.self, forKey: .graphqlOperation)
         }
 
         public let id: Int
@@ -79,6 +81,7 @@ public class RequestStore {
         public var isPinned: Bool = false
         public var isWebSocket: Bool = false
         public var wsFrames: [WSFrame] = []
+        public var graphqlOperation: String?
 
         public init(id: Int = 0, timestamp: Date = Date(), method: String, url: String, host: String, appIcon: String, appName: String, requestHeaders: [(String, String)] = [], requestBody: String? = nil, statusCode: UInt? = nil, responseHeaders: [(String, String)] = [], responseBody: String? = nil, isMock: Bool = false, isTunnel: Bool = false, isPinned: Bool = false) {
             self.id = id; self.timestamp = timestamp; self.method = method; self.url = url
@@ -191,6 +194,15 @@ public class RequestStore {
         queue.sync {
             if let idx = entries.firstIndex(where: { $0.id == requestId }) {
                 entries[idx].wsFrames.append(frame)
+            }
+        }
+        onChange?()
+    }
+
+    func setGraphQLOperation(id: Int, operation: String) {
+        queue.sync {
+            if let idx = entries.firstIndex(where: { $0.id == id }) {
+                entries[idx].graphqlOperation = operation
             }
         }
         onChange?()

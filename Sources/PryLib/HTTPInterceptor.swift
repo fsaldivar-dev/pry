@@ -60,7 +60,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         // Log + store
         let logEntry = "\(head.method) \(head.uri) -> \(host):\(port)"
         let requestId = BodyPrinter.printRequestHead(head, host: host, port: port)
-        BodyPrinter.printRequestBody(body)
+        BodyPrinter.printRequestBody(body, requestId: requestId)
         Config.appendLog(logEntry)
 
         // Breakpoint check
@@ -108,6 +108,18 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         var rewrittenHead = head
         let rewrittenHeaders = HeaderRewrite.apply(to: head.headers.map { ($0.name, $0.value) })
         rewrittenHead.headers = .init(rewrittenHeaders.map { (name: $0.0, value: $0.1) })
+
+        // Rule Engine: apply scripting rules
+        let matchingRules = RuleEngine.matchingRules(for: head.uri, method: "\(head.method)")
+        if !matchingRules.isEmpty {
+            var ruleHeaders = rewrittenHead.headers.map { ($0.name, $0.value) }
+            let ruleResult = RuleEngine.applyRequestRules(rules: matchingRules, headers: &ruleHeaders)
+            rewrittenHead.headers = .init(ruleHeaders.map { (name: $0.0, value: $0.1) })
+            if ruleResult.shouldDrop {
+                context.close(promise: nil)
+                return
+            }
+        }
 
         // No-cache: strip caching headers and add no-store
         if Config.get("nocache") == "true" {

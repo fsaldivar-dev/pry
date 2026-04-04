@@ -298,7 +298,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
     private func handleDecryptedRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?) {
         let logEntry = "\(head.method) https://\(host)\(head.uri)"
         let requestId = BodyPrinter.printRequestHead(head, host: host, port: port)
-        BodyPrinter.printRequestBody(body)
+        BodyPrinter.printRequestBody(body, requestId: requestId)
         Config.appendLog(logEntry)
 
         // WebSocket upgrade detection
@@ -368,6 +368,17 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                 buffer.writeString(response)
                 context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
                 context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
+                return
+            }
+        }
+
+        // Rule Engine: apply scripting rules
+        let matchingRules = RuleEngine.matchingRules(for: head.uri, method: "\(head.method)")
+        if !matchingRules.isEmpty {
+            var ruleHeaders = head.headers.map { ($0.name, $0.value) }
+            let ruleResult = RuleEngine.applyRequestRules(rules: matchingRules, headers: &ruleHeaders)
+            if ruleResult.shouldDrop {
+                context.close(promise: nil)
                 return
             }
         }
