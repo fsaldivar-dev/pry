@@ -60,7 +60,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         // Log + store
         let logEntry = "\(head.method) \(head.uri) -> \(host):\(port)"
         let requestId = BodyPrinter.printRequestHead(head, host: host, port: port)
-        BodyPrinter.printRequestBody(body)
+        BodyPrinter.printRequestBody(body, requestId: requestId)
         Config.appendLog(logEntry)
 
         // Breakpoint check

@@ -31,12 +31,19 @@ public struct BodyPrinter {
         )
     }
 
-    public static func printRequestBody(_ body: ByteBuffer?) {
+    public static func printRequestBody(_ body: ByteBuffer?, requestId: Int = 0) {
         guard let body = body, body.readableBytes > 0 else { return }
         var buf = body
         if let text = buf.readString(length: min(buf.readableBytes, maxBodyPreview)) {
             let formatted = formatBody(text, contentType: nil)
             out.log(colored("    Body: ", .dim) + formatted, type: .info)
+
+            // Detect GraphQL
+            if requestId > 0, let gql = GraphQLDetector.detect(body: text) {
+                let opName = gql.operationName ?? "anonymous"
+                out.log(colored("    🔮 GraphQL: \(opName)", .bold), type: .info)
+                RequestStore.shared.setGraphQLOperation(id: requestId, operation: opName)
+            }
         }
     }
 
