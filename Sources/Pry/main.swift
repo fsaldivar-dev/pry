@@ -37,6 +37,10 @@ func printUsage() {
       pry headers                List active header rules
       pry headers clear          Clear all header rules
       pry export har FILE        Export traffic as HAR 1.2
+      pry break PATTERN          Set breakpoint on URL pattern
+      pry breaks                 List active breakpoints
+      pry breaks clear           Clear all breakpoints
+      pry init [DIR]             Scan project for API domains → .prywatch
 
     Examples:
       pry start
@@ -580,6 +584,52 @@ case "export":
     } catch {
         print("Error: \(error)")
         exit(1)
+    }
+
+case "break":
+    guard args.count >= 2 else {
+        print("Usage: pry break /api/login")
+        print("       pry break *.myapp.com")
+        exit(1)
+    }
+    let pattern = args[1]
+    BreakpointStore.shared.add(pattern)
+    print("🐱 Breakpoint added: \(pattern)")
+    print("   Requests matching this pattern will be paused in TUI")
+
+case "breaks":
+    if args.count >= 2 && args[1] == "clear" {
+        BreakpointStore.shared.clearAll()
+        print("🐱 All breakpoints cleared")
+    } else {
+        let patterns = BreakpointStore.shared.all()
+        if patterns.isEmpty {
+            print("🐱 No breakpoints set")
+            print("   Add one with: pry break /api/login")
+        } else {
+            print("🐱 Active breakpoints:")
+            for pattern in patterns {
+                print("   ⏸️  \(pattern)")
+            }
+        }
+    }
+
+case "init":
+    let dir = args.count >= 2 ? args[1] : FileManager.default.currentDirectoryPath
+    print("🐱 Scanning \(dir) for API domains...")
+    let domains = ProjectScanner.scan(directory: dir)
+    if domains.isEmpty {
+        print("   No domains found. Add them manually with: pry add DOMAIN")
+    } else {
+        for domain in domains {
+            Watchlist.add(domain)
+        }
+        print("   Found \(domains.count) domain(s):")
+        for domain in domains {
+            print("   + \(domain)")
+        }
+        print("\n   Written to .prywatch")
+        print("   Run 'pry trust' to install CA, then 'pry start'")
     }
 
 case "help", "--help", "-h":
