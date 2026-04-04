@@ -55,6 +55,9 @@ func printUsage() {
       pry save FILE              Save captured session
       pry load FILE              Load saved session
       pry diff ID1 ID2           Compare two captured requests
+      pry rules load FILE        Load .pryrules scripting file
+      pry rules                  List active rules
+      pry rules clear            Clear all rules
 
     Examples:
       pry start
@@ -786,6 +789,50 @@ case "diff":
     }
     let diffLines = DiffTool.diff(req1: req1, req2: req2)
     print(DiffTool.format(diffLines))
+
+case "rules":
+    if args.count >= 2 && args[1] == "load" {
+        guard args.count >= 3 else {
+            print("Usage: pry rules load rules.pry")
+            exit(1)
+        }
+        do {
+            try RuleEngine.loadFromFile(path: args[2])
+            let count = RuleEngine.all().count
+            print("🐱 Loaded \(count) rule(s) from \(args[2])")
+        } catch {
+            print("Error: \(error)")
+            exit(1)
+        }
+    } else if args.count >= 2 && args[1] == "clear" {
+        RuleEngine.clear()
+        print("🐱 All rules cleared")
+    } else {
+        let rules = RuleEngine.all()
+        if rules.isEmpty {
+            print("🐱 No rules loaded")
+            print("   Load with: pry rules load rules.pry")
+        } else {
+            print("🐱 Active rules:")
+            for rule in rules {
+                let method = rule.method.map { "\($0) " } ?? ""
+                print("   rule \"\(method)\(rule.pattern)\"")
+                for action in rule.actions {
+                    switch action {
+                    case .setHeader(let n, let v): print("     set-header \(n) \"\(v)\"")
+                    case .removeHeader(let n): print("     remove-header \(n)")
+                    case .replaceHost(let h): print("     replace-host \(h)")
+                    case .replacePort(let p): print("     replace-port \(p)")
+                    case .replacePath(let p): print("     replace-path \"\(p)\"")
+                    case .setStatus(let s): print("     set-status \(s)")
+                    case .setBody(let b): print("     set-body '\(b.prefix(60))'")
+                    case .delay(let ms): print("     delay \(ms)")
+                    case .drop: print("     drop")
+                    }
+                }
+            }
+        }
+    }
 
 case "help", "--help", "-h":
     printUsage()

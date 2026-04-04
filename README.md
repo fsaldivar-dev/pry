@@ -120,18 +120,6 @@ pry start --headless   # Sin TUI, solo logging a stdout
 pry start --port 9090  # Puerto custom
 ```
 
-**Keybindings:**
-
-| Tecla | Acción |
-|-------|--------|
-| `↑` `↓` | Navegar requests |
-| `c` | Copiar request como cURL al clipboard |
-| `f` | Ciclar filtros (GET → POST → PUT → DELETE → 2xx → 4xx → 5xx) |
-| `/` | Buscar por URL, host, método o body |
-| `Tab` | Alternar entre requests y mocks activos |
-| `Esc` | Limpiar filtro/búsqueda |
-| `q` | Salir |
-
 **Indicadores:**
 
 | Icono | Significado |
@@ -148,6 +136,124 @@ pry start --port 9090  # Puerto custom
 pry watch api.myapp.com   # Solo mostrar tráfico de este dominio
 pry watch clear           # Limpiar filtro
 ```
+
+### Comandos avanzados
+
+#### No-cache
+
+```bash
+pry nocache on            # Agrega Cache-Control: no-store a todos los requests
+pry nocache off           # Desactiva no-cache
+```
+
+#### Bloquear dominios
+
+```bash
+pry block ads.tracker.com     # Bloquea dominio (responde 403)
+pry blocks                    # Lista dominios bloqueados
+pry blocks clear              # Limpia lista de bloqueo
+```
+
+#### Redirigir hosts
+
+```bash
+pry redirect api.prod.com api.staging.com   # Redirige todo el tráfico
+pry redirects                               # Lista redirects activos
+pry redirects clear                         # Limpia redirects
+```
+
+#### DNS override
+
+```bash
+pry dns api.myapp.com 127.0.0.1   # Resuelve dominio a IP custom
+pry dns list                       # Lista overrides activos
+pry dns clear                      # Limpia overrides
+```
+
+#### Componer requests
+
+```bash
+pry send GET https://api.myapp.com/users
+pry send POST https://api.myapp.com/login --header "Content-Type: application/json" --body '{"user":"admin"}'
+```
+
+#### Sesiones
+
+```bash
+pry save session.pry      # Guarda requests capturados a archivo
+pry load session.pry      # Carga sesion guardada
+```
+
+#### Comparar requests
+
+```bash
+pry diff 1 3              # Compara request #1 con #3 (headers, body, status)
+```
+
+#### HAR export
+
+```bash
+pry export har traffic.har    # Exporta tráfico capturado como HAR 1.2
+```
+
+#### Header rewrite
+
+```bash
+pry header add Authorization "Bearer token123"    # Agrega header a todos los requests
+pry header remove Cookie                          # Elimina header de todos los requests
+pry headers                                       # Lista reglas activas
+pry headers clear                                 # Limpia reglas
+```
+
+#### Map local
+
+```bash
+pry map '/api/v1/.*' mock-data.json    # Responde con archivo local para URLs que matcheen
+pry maps                               # Lista maps activos
+pry maps clear                         # Limpia maps
+```
+
+#### Breakpoints
+
+```bash
+pry break /api/login      # Pausa requests que matcheen el patrón
+pry breaks                # Lista breakpoints activos
+pry breaks clear          # Limpia breakpoints
+```
+
+#### Escanear proyecto
+
+```bash
+pry init                  # Escanea directorio actual buscando dominios API
+pry init ./MyApp          # Escanea directorio específico
+```
+
+### Code generation (TUI)
+
+Dentro de la TUI, la tecla `g` cicla entre formatos de generacion de codigo: **curl**, **swift** y **python**. La tecla `c` copia el request seleccionado en el formato activo al clipboard.
+
+```
+g → cicla: curl → swift → python
+c → copia al clipboard en el formato seleccionado
+```
+
+### TUI interactiva (keybindings completos)
+
+**Keybindings:**
+
+| Tecla | Accion |
+|-------|--------|
+| `↑` `↓` | Navegar requests |
+| `c` | Copiar request en formato seleccionado (curl/swift/python) |
+| `f` | Ciclar filtros (GET, POST, PUT, DELETE, 2xx, 4xx, 5xx) |
+| `/` | Buscar por URL, host, metodo o body |
+| `g` | Ciclar formato de code generation (curl/swift/python) |
+| `d` | Diff del request seleccionado con el anterior |
+| `b` | Reanudar request pausado por breakpoint |
+| `r` | Repetir request seleccionado |
+| `Tab` | Alternar entre requests y mocks activos |
+| `Esc` | Limpiar filtro/busqueda |
+| `q` | Salir |
 
 ---
 
