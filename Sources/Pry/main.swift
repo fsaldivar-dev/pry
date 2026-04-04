@@ -55,6 +55,10 @@ func printUsage() {
       pry save FILE              Save captured session
       pry load FILE              Load saved session
       pry diff ID1 ID2           Compare two captured requests
+      pry import FILE            Import HAR file
+      pry mcp                    Start MCP server for Claude Code
+      pry start --reverse URL    Reverse proxy mode
+      pry trust --android        Install CA on Android via ADB
 
     Examples:
       pry start
@@ -113,7 +117,13 @@ case "start":
         }
     }
 
-    let server = ProxyServer(port: port)
+    // Parse reverse proxy mode
+    var proxyMode: ProxyMode = .forward
+    if let revIdx = args.firstIndex(of: "--reverse"), revIdx + 1 < args.count {
+        proxyMode = .reverse(target: args[revIdx + 1])
+    }
+
+    let server = ProxyServer(port: port, mode: proxyMode)
     let headless = args.contains("--headless")
 
     if headless {
@@ -382,6 +392,33 @@ case "trust":
         }
     } catch {
         print("   Simulator: Error — \(error)")
+    }
+
+    // Install in Android device/emulator via ADB
+    if args.contains("--android") {
+        print("🐱 Installing CA certificate on Android...")
+        let adbProcess = Process()
+        adbProcess.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        adbProcess.arguments = ["adb", "push", caPath, "/sdcard/pry-ca.pem"]
+        do {
+            try adbProcess.run()
+            adbProcess.waitUntilExit()
+            if adbProcess.terminationStatus == 0 {
+                print("   Android: CA pushed to /sdcard/pry-ca.pem")
+                print("")
+                print("   Next steps on your Android device:")
+                print("   1. Go to Settings > Security > Install certificates")
+                print("   2. Select 'CA certificate'")
+                print("   3. Choose pry-ca.pem from Downloads/sdcard")
+                print("   4. Configure WiFi proxy to point to your Mac's IP:\(Config.defaultPort)")
+            } else {
+                print("   Android: ADB push failed. Is ADB installed and a device connected?")
+                print("   Install ADB: brew install android-platform-tools")
+            }
+        } catch {
+            print("   Android: Error — \(error)")
+            print("   Install ADB: brew install android-platform-tools")
+        }
     }
 
 case "ca":
@@ -786,6 +823,24 @@ case "diff":
     }
     let diffLines = DiffTool.diff(req1: req1, req2: req2)
     print(DiffTool.format(diffLines))
+
+case "import":
+    guard args.count >= 2 else {
+        print("Usage: pry import file.har")
+        exit(1)
+    }
+    let filePath = args[1]
+    do {
+        try HARImporter.importFromFile(path: filePath)
+        let count = RequestStore.shared.count()
+        print("🐱 Imported \(count) requests from \(filePath)")
+    } catch {
+        print("Error: \(error)")
+        exit(1)
+    }
+
+case "mcp":
+    MCPServer.run()
 
 case "help", "--help", "-h":
     printUsage()
