@@ -55,6 +55,7 @@ func printUsage() {
       pry save FILE              Save captured session
       pry load FILE              Load saved session
       pry diff ID1 ID2           Compare two captured requests
+      pry throttle PRESET        Simulate slow network (3g/slow/edge/wifi/off)
       pry rules load FILE        Load .pryrules scripting file
       pry rules                  List active rules
       pry rules clear            Clear all rules
@@ -789,6 +790,40 @@ case "diff":
     }
     let diffLines = DiffTool.diff(req1: req1, req2: req2)
     print(DiffTool.format(diffLines))
+
+case "throttle":
+    if args.count < 2 {
+        if let config = NetworkThrottle.current {
+            print("🐱 Throttle: \(config.label) (\(config.bytesPerSecond / 1000) KB/s, \(config.latencyMs)ms latency)")
+        } else {
+            print("🐱 Throttle: off")
+            print("   Usage: pry throttle 3g|slow|edge|wifi|off")
+            print("          pry throttle --bandwidth KB --latency MS")
+        }
+    } else if args[1] == "off" {
+        NetworkThrottle.disable()
+        print("🐱 Throttle disabled")
+    } else if args[1] == "--bandwidth" {
+        guard args.count >= 3, let bw = Int(args[2]) else {
+            print("Usage: pry throttle --bandwidth KB [--latency MS]")
+            exit(1)
+        }
+        var latency = 0
+        if let latIdx = args.firstIndex(of: "--latency"), latIdx + 1 < args.count {
+            latency = Int(args[latIdx + 1]) ?? 0
+        }
+        let config = ThrottleConfig(bytesPerSecond: bw * 1000, latencyMs: latency)
+        NetworkThrottle.enable(config)
+        print("🐱 Throttle: Custom (\(bw) KB/s, \(latency)ms latency)")
+    } else if let config = NetworkThrottle.preset(args[1]) {
+        NetworkThrottle.enable(config)
+        print("🐱 Throttle: \(config.label) (\(config.bytesPerSecond / 1000) KB/s, \(config.latencyMs)ms latency)")
+        print("   Restart proxy for changes to take effect")
+    } else {
+        print("Unknown preset: \(args[1])")
+        print("   Available: 3g, slow, edge, wifi, off")
+        exit(1)
+    }
 
 case "rules":
     if args.count >= 2 && args[1] == "load" {

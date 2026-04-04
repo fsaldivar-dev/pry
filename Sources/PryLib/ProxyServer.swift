@@ -36,6 +36,9 @@ public final class ProxyServer {
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes))
                     )
                     try channel.pipeline.syncOperations.addHandler(HTTPResponseEncoder())
+                    if let throttle = NetworkThrottle.current {
+                        try channel.pipeline.syncOperations.addHandler(ThrottleHandler(config: throttle))
+                    }
                     try channel.pipeline.syncOperations.addHandler(ConnectHandler(ca: ca))
                     try channel.pipeline.syncOperations.addHandler(HTTPInterceptor(filter: filter))
                 }

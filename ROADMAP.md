@@ -49,13 +49,17 @@
 - [x] Code generation: curl/swift/python (`g` en TUI)
 - [x] TUI keybindings: diff (`d`), resume breakpoint (`b`)
 
-## v0.6 — Scripting DSL (planificado)
-- [ ] DSL para scripts de automatizacion (intercept, modify, replay)
-- [ ] Integracion con GraphQL viewer
-- [ ] Import HAR (`pry import FILE`)
+## v0.6 — Scripting + Throttling ✅
+- [x] DSL declarativo `.pryrules` (set-header, set-status, set-body, delay, drop)
+- [x] GraphQL detector (deteccion automatica, icono 🔮 en TUI)
+- [x] Network throttling (presets: 3g, slow, edge, wifi + custom)
 
-## v0.7 — Networking avanzado (futuro)
-- [ ] Network throttling (simular 3G, latencia)
-- [ ] SOCKS proxy
-- [ ] Reverse proxy (`--reverse URL`)
-- [ ] Integracion con AutoPilot
+## No priorizadas
+
+Estas features no fueron priorizadas para Pry. Si las necesitas, levanta un issue en GitHub:
+
+- **SOCKS Proxy** — protocolo SOCKS5 (la mayoria de iOS devs usa HTTP proxy)
+- **Protobuf Decoder** — decodificar Protocol Buffers a JSON (solo apps con protobuf)
+- **gRPC Support** — interceptar trafico gRPC (requiere HTTP/2, muy nicho)
+- **Reverse proxy** — modo `--reverse URL` (usar nginx o caddy para esto)
+- **Integracion con AutoPilot** — pendiente de definir alcance
