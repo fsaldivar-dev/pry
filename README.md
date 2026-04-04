@@ -228,6 +228,71 @@ pry init                  # Escanea directorio actual buscando dominios API
 pry init ./MyApp          # Escanea directorio específico
 ```
 
+### Scripting (.pryrules)
+
+Crea un archivo de reglas declarativas para modificar requests y responses:
+
+```
+rule "/api/*"
+  set-header Authorization "Bearer token123"
+  remove-header Cookie
+
+rule "POST /api/auth"
+  set-status 200
+  set-body '{"token":"mock"}'
+
+rule "*.tracker.com"
+  drop
+
+rule "/api/slow"
+  delay 2000
+```
+
+```bash
+pry rules load rules.pry   # Cargar archivo de reglas
+pry rules                   # Ver reglas activas
+pry rules clear             # Limpiar reglas
+```
+
+Acciones: `set-header`, `remove-header`, `replace-host`, `replace-port`, `replace-path`, `set-status`, `set-body`, `delay`, `drop`
+
+### Network Throttling
+
+```bash
+pry throttle 3g             # 750 KB/s, 200ms latencia
+pry throttle slow           # 100 KB/s, 500ms
+pry throttle edge           # 50 KB/s, 800ms
+pry throttle wifi           # 5 MB/s, 10ms
+pry throttle --bandwidth 256 --latency 100   # Custom
+pry throttle off            # Desactivar
+```
+
+### GraphQL
+
+Pry detecta automáticamente queries GraphQL en requests POST. En la TUI aparecen con el icono 🔮 y el nombre de la operación.
+
+### Modo headless
+
+Para CI/CD, scripts, o logging sin TUI:
+
+```bash
+pry start --headless &
+curl -x http://localhost:8080 http://api.com/test
+pry export har results.har
+pry stop
+```
+
+### Comandos inline (TUI)
+
+Mientras el proxy corre en la TUI, puedes escribir comandos directamente sin reiniciar:
+
+```
+mock /api/test '{"ok":true}'
+add api.myapp.com
+header add X-Debug "true"
+export har traffic.har
+```
+
 ### Code generation (TUI)
 
 Dentro de la TUI, la tecla `g` cicla entre formatos de generacion de codigo: **curl**, **swift** y **python**. La tecla `c` copia el request seleccionado en el formato activo al clipboard.
