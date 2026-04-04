@@ -2,14 +2,21 @@ import NIO
 import NIOHTTP1
 import Foundation
 
+public enum ProxyMode {
+    case forward
+    case reverse(target: String)
+}
+
 public final class ProxyServer {
     private let port: Int
+    private let mode: ProxyMode
     private let group: MultiThreadedEventLoopGroup
     private var channel: Channel?
     private let ca: CertificateAuthority?
 
-    public init(port: Int = Config.defaultPort) {
+    public init(port: Int = Config.defaultPort, mode: ProxyMode = .forward) {
         self.port = port
+        self.mode = mode
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 
         // Try to init CA — if it fails, TLS interception disabled
@@ -27,6 +34,7 @@ public final class ProxyServer {
         let mocks = Config.loadMocks()
         let ca = self.ca
 
+        let proxyMode = self.mode
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(ChannelOptions.backlog, value: 256)
             .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
@@ -36,8 +44,16 @@ public final class ProxyServer {
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes))
                     )
                     try channel.pipeline.syncOperations.addHandler(HTTPResponseEncoder())
-                    try channel.pipeline.syncOperations.addHandler(ConnectHandler(ca: ca))
-                    try channel.pipeline.syncOperations.addHandler(HTTPInterceptor(filter: filter))
+                    switch proxyMode {
+                    case .forward:
+                        try channel.pipeline.syncOperations.addHandler(ConnectHandler(ca: ca))
+                        try channel.pipeline.syncOperations.addHandler(HTTPInterceptor(filter: filter))
+                    case .reverse(let target):
+                        let parsed = ReverseProxyHandler.parseTargetOrigin(target)
+                        try channel.pipeline.syncOperations.addHandler(
+                            ReverseProxyHandler(targetHost: parsed.host, targetPort: parsed.port, targetIsHTTPS: parsed.isHTTPS)
+                        )
+                    }
                 }
             }
             .childChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
@@ -51,7 +67,11 @@ public final class ProxyServer {
         try? "\(pid)".write(toFile: Config.pidFile, atomically: true, encoding: .utf8)
 
         let out = OutputBroker.shared
-        out.log("🐱 Pry listening on :\(port)", type: .info)
+        if case .reverse(let target) = mode {
+            out.log("🐱 Pry reverse proxy on :\(port) → \(target)", type: .info)
+        } else {
+            out.log("🐱 Pry listening on :\(port)", type: .info)
+        }
         if ca != nil {
             out.log("   HTTPS interception: enabled", type: .info)
         }
