@@ -46,6 +46,11 @@ Sources/PryLib/
 ├── RequestRepeater.swift     → Repetir requests desde TUI
 ├── BreakpointStore.swift     → Almacen de breakpoints
 ├── RequestBreakpoint.swift   → Logica de breakpoints en requests
+├── RuleEngine.swift          → DSL declarativo .pryrules (parser + engine)
+├── NetworkThrottle.swift     → Presets de throttling (3g/slow/edge/wifi)
+├── ThrottleHandler.swift     → NIO handler con token bucket algorithm
+├── GraphQLDetector.swift     → Deteccion automatica de queries GraphQL
+├── CodeGenerator.swift       → Generador de Swift/Python desde requests
 ├── ProjectScanner.swift      → Escanea proyecto para pry init
 ├── WSFrame.swift             → WebSocket frame parsing (RFC 6455)
 ├── WebSocketInterceptor.swift → Intercepcion de WebSocket
@@ -135,6 +140,10 @@ pry maps [clear]            # Lista/limpia maps
 pry header add NAME VALUE   # Agregar header a todos los requests
 pry header remove NAME      # Eliminar header de todos los requests
 pry headers [clear]         # Lista/limpia reglas de headers
+pry throttle PRESET         # Throttling: 3g, slow, edge, wifi, off
+pry throttle --bandwidth KB --latency MS  # Throttling custom
+pry rules load FILE         # Cargar archivo .pryrules
+pry rules [clear]           # Lista/limpia reglas de scripting
 ```
 
 ### Flags
