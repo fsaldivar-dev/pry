@@ -298,7 +298,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
     private func handleDecryptedRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?) {
         let logEntry = "\(head.method) https://\(host)\(head.uri)"
         let requestId = BodyPrinter.printRequestHead(head, host: host, port: port)
-        BodyPrinter.printRequestBody(body)
+        BodyPrinter.printRequestBody(body, requestId: requestId)
         Config.appendLog(logEntry)
 
         // WebSocket upgrade detection

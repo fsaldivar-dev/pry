@@ -556,6 +556,7 @@ public class TUI {
                 let statusIcon: String
                 let isPaused = RequestBreakpointManager.shared.getPaused().contains { $0.id == req.id }
                 if isPaused { statusIcon = "⏸️" }
+                else if req.graphqlOperation != nil { statusIcon = "🔮" }
                 else if req.isPinned { statusIcon = "📌" }
                 else if req.isWebSocket { statusIcon = "🔌" }
                 else if req.isMock { statusIcon = "🟡" }
