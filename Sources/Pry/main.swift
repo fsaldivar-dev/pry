@@ -41,6 +41,20 @@ func printUsage() {
       pry breaks                 List active breakpoints
       pry breaks clear           Clear all breakpoints
       pry init [DIR]             Scan project for API domains → .prywatch
+      pry nocache on|off         Toggle no-cache headers
+      pry block DOMAIN           Block domain (responds 403)
+      pry blocks                 List blocked domains
+      pry blocks clear           Clear block list
+      pry redirect SRC DST       Redirect host to another host
+      pry redirects              List active redirects
+      pry redirects clear        Clear all redirects
+      pry dns DOMAIN IP          Override DNS resolution
+      pry dns list               List DNS overrides
+      pry dns clear              Clear DNS overrides
+      pry send METHOD URL        Send request through proxy
+      pry save FILE              Save captured session
+      pry load FILE              Load saved session
+      pry diff ID1 ID2           Compare two captured requests
 
     Examples:
       pry start
@@ -631,6 +645,147 @@ case "init":
         print("\n   Written to .prywatch")
         print("   Run 'pry trust' to install CA, then 'pry start'")
     }
+
+case "nocache":
+    guard args.count >= 2 else {
+        print("Usage: pry nocache on|off")
+        exit(1)
+    }
+    if args[1] == "on" {
+        Config.set("nocache", value: "true")
+        print("🐱 No-cache enabled — Cache-Control: no-store will be added to all requests")
+    } else {
+        Config.set("nocache", value: "false")
+        print("🐱 No-cache disabled")
+    }
+
+case "block":
+    guard args.count >= 2 else {
+        print("Usage: pry block domain.com")
+        exit(1)
+    }
+    BlockList.add(args[1])
+    print("🐱 Blocked: \(args[1])")
+
+case "blocks":
+    if args.count >= 2 && args[1] == "clear" {
+        BlockList.clear()
+        print("🐱 Block list cleared")
+    } else {
+        let domains = BlockList.loadAll()
+        if domains.isEmpty {
+            print("🐱 No blocked domains")
+        } else {
+            print("🐱 Blocked domains:")
+            for d in domains { print("   🚫 \(d)") }
+        }
+    }
+
+case "redirect":
+    guard args.count >= 3 else {
+        print("Usage: pry redirect api.prod.com api.staging.com")
+        exit(1)
+    }
+    MapRemote.save(sourceHost: args[1], targetHost: args[2])
+    print("🐱 Redirect: \(args[1]) → \(args[2])")
+
+case "redirects":
+    if args.count >= 2 && args[1] == "clear" {
+        MapRemote.clear()
+        print("🐱 All redirects cleared")
+    } else {
+        let rules = MapRemote.loadAll()
+        if rules.isEmpty {
+            print("🐱 No redirects set")
+        } else {
+            print("🐱 Active redirects:")
+            for r in rules { print("   \(r.sourceHost) → \(r.targetHost)") }
+        }
+    }
+
+case "dns":
+    if args.count >= 3 && args[1] != "list" && args[1] != "clear" {
+        DNSSpoofing.add(domain: args[1], ip: args[2])
+        print("🐱 DNS override: \(args[1]) → \(args[2])")
+    } else if args.count >= 2 && args[1] == "clear" {
+        DNSSpoofing.clear()
+        print("🐱 DNS overrides cleared")
+    } else if args.count >= 2 && args[1] == "list" {
+        let rules = DNSSpoofing.loadAll()
+        if rules.isEmpty {
+            print("🐱 No DNS overrides")
+        } else {
+            print("🐱 DNS overrides:")
+            for r in rules { print("   \(r.domain) → \(r.ip)") }
+        }
+    } else {
+        print("Usage: pry dns DOMAIN IP | pry dns list | pry dns clear")
+    }
+
+case "send":
+    guard args.count >= 3 else {
+        print("Usage: pry send METHOD URL [--header \"Name: Value\"] [--body '{...}']")
+        exit(1)
+    }
+    let method = args[1].uppercased()
+    let urlStr = args[2]
+    var headers: [(String, String)] = []
+    var body: String?
+    var i = 3
+    while i < args.count {
+        if args[i] == "--header" && i + 1 < args.count {
+            let parts = args[i+1].split(separator: ":", maxSplits: 1)
+            if parts.count == 2 {
+                headers.append((parts[0].trimmingCharacters(in: .whitespaces), parts[1].trimmingCharacters(in: .whitespaces)))
+            }
+            i += 2
+        } else if args[i] == "--body" && i + 1 < args.count {
+            body = args[i+1]
+            i += 2
+        } else { i += 1 }
+    }
+    RequestComposer.send(method: method, urlString: urlStr, headers: headers, body: body, proxyPort: Config.defaultPort)
+
+case "save":
+    guard args.count >= 2 else {
+        print("Usage: pry save session.pry")
+        exit(1)
+    }
+    do {
+        try SessionManager.save(to: args[1])
+        let count = RequestStore.shared.count()
+        print("🐱 Session saved: \(args[1]) (\(count) requests)")
+    } catch {
+        print("Error: \(error)")
+        exit(1)
+    }
+
+case "load":
+    guard args.count >= 2 else {
+        print("Usage: pry load session.pry")
+        exit(1)
+    }
+    do {
+        try SessionManager.load(from: args[1])
+        let count = RequestStore.shared.count()
+        print("🐱 Session loaded: \(args[1]) (\(count) requests)")
+    } catch {
+        print("Error: \(error)")
+        exit(1)
+    }
+
+case "diff":
+    guard args.count >= 3, let id1 = Int(args[1]), let id2 = Int(args[2]) else {
+        print("Usage: pry diff ID1 ID2")
+        exit(1)
+    }
+    guard let req1 = RequestStore.shared.get(id: id1),
+          let req2 = RequestStore.shared.get(id: id2) else {
+        print("Error: Request not found")
+        exit(1)
+    }
+    let diffLines = DiffTool.diff(req1: req1, req2: req2)
+    print(DiffTool.format(diffLines))
 
 case "help", "--help", "-h":
     printUsage()
