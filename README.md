@@ -320,6 +320,23 @@ c → copia al clipboard en el formato seleccionado
 | `Esc` | Limpiar filtro/busqueda |
 | `q` | Salir |
 
+### App de testing (iOS Simulator)
+
+SimulationPry es una app iOS incluida para probar Pry con el Simulator:
+
+```bash
+# 1. Configura Pry
+pry add httpbin.org
+pry trust
+pry start
+
+# 2. Abre SimulationPry/SimulationPry.xcodeproj en Xcode
+# 3. Corre en el Simulator
+# 4. Presiona los botones — cada request aparece en la TUI
+```
+
+La app tiene botones para GET, POST, PUT, DELETE (HTTP y HTTPS), status codes, delays, headers con auth, y JSON bodies.
+
 ---
 
 ## Alternativas

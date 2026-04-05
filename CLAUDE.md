@@ -47,19 +47,26 @@ Sources/PryLib/
 ├── BreakpointStore.swift     → Almacen de breakpoints
 ├── RequestBreakpoint.swift   → Logica de breakpoints en requests
 ├── RuleEngine.swift          → DSL declarativo .pryrules (parser + engine)
-├── NetworkThrottle.swift     → Presets de throttling (3g/slow/edge/wifi)
-├── ThrottleHandler.swift     → NIO handler con token bucket algorithm
 ├── GraphQLDetector.swift     → Deteccion automatica de queries GraphQL
 ├── CodeGenerator.swift       → Generador de Swift/Python desde requests
 ├── ProjectScanner.swift      → Escanea proyecto para pry init
 ├── WSFrame.swift             → WebSocket frame parsing (RFC 6455)
 ├── WebSocketInterceptor.swift → Intercepcion de WebSocket
 ├── TUI/
+│   ├── TabManager.swift      → Tabs con filtros con nombre
+│   │
 │   ├── TUI.swift             → TUI interactiva (3 paneles, keybindings, code gen)
 │   ├── RequestStore.swift    → Almacen de requests capturados en memoria
 │   ├── OutputBroker.swift    → Coordinacion de output TUI/headless
 │   ├── ANSI.swift            → Secuencias de control de terminal
 │   └── Terminal.swift        → Raw mode management
+
+SimulationPry/
+├── SimulationPry/
+│   ├── SimulationPryApp.swift → Entry point SwiftUI
+│   ├── ContentView.swift      → Botones de test HTTP/HTTPS
+│   ├── RequestViewModel.swift → URLSession con proxy config
+│   └── Info.plist             → ATS exception para HTTP
 ```
 
 ## Workflow de desarrollo
