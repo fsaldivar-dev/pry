@@ -37,7 +37,8 @@ public struct CurlGenerator {
         process.standardInput = pipe
         do {
             try process.run()
-            pipe.fileHandleForWriting.write(text.data(using: .utf8)!)
+            guard let data = text.data(using: .utf8) else { return false }
+            pipe.fileHandleForWriting.write(data)
             pipe.fileHandleForWriting.closeFile()
             process.waitUntilExit()
             return process.terminationStatus == 0
