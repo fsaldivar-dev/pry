@@ -44,9 +44,10 @@ public struct Config {
 
     public static func appendLog(_ entry: String) {
         let line = "\(ISO8601DateFormatter().string(from: Date())) \(entry)\n"
-        if let handle = FileHandle(forWritingAtPath: logFile) {
+        if let handle = FileHandle(forWritingAtPath: logFile),
+           let data = line.data(using: .utf8) {
             handle.seekToEndOfFile()
-            handle.write(line.data(using: .utf8)!)
+            handle.write(data)
             handle.closeFile()
         } else {
             try? line.write(toFile: logFile, atomically: true, encoding: .utf8)
@@ -67,9 +68,10 @@ public struct Config {
 
     public static func saveMock(path: String, response: String) {
         let entry = "\(path)\t\(response)\n"
-        if let handle = FileHandle(forWritingAtPath: mockFile) {
+        if let handle = FileHandle(forWritingAtPath: mockFile),
+           let data = entry.data(using: .utf8) {
             handle.seekToEndOfFile()
-            handle.write(entry.data(using: .utf8)!)
+            handle.write(data)
             handle.closeFile()
         } else {
             try? entry.write(toFile: mockFile, atomically: true, encoding: .utf8)

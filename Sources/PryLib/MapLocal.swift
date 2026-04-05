@@ -10,9 +10,10 @@ public struct MapLocal {
 
     public static func save(regex: String, filePath: String) {
         let entry = "\(regex)\t\(filePath)\n"
-        if let handle = FileHandle(forWritingAtPath: mapsFile) {
+        if let handle = FileHandle(forWritingAtPath: mapsFile),
+           let data = entry.data(using: .utf8) {
             handle.seekToEndOfFile()
-            handle.write(entry.data(using: .utf8)!)
+            handle.write(data)
             handle.closeFile()
         } else {
             try? entry.write(toFile: mapsFile, atomically: true, encoding: .utf8)
@@ -42,7 +43,13 @@ public struct MapLocal {
     /// Returns file content if URL matches any map rule
     public static func matchContent(url: String) -> String? {
         guard let filePath = match(url: url) else { return nil }
-        return try? String(contentsOfFile: filePath, encoding: .utf8)
+        // Validate path — prevent path traversal attacks
+        let resolved = (filePath as NSString).standardizingPath
+        let cwd = FileManager.default.currentDirectoryPath
+        guard resolved.hasPrefix(cwd) || resolved.hasPrefix("/tmp/") || resolved.hasPrefix(NSHomeDirectory()) else {
+            return nil
+        }
+        return try? String(contentsOfFile: resolved, encoding: .utf8)
     }
 
     public static func clear() {

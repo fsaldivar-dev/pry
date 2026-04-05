@@ -409,7 +409,9 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
 
             ClientBootstrap(group: eventLoop)
                 .channelInitializer { channel in
-                    let sslHandler = try! NIOSSLClientHandler(context: sslContext, serverHostname: self.host)
+                    guard let sslHandler = try? NIOSSLClientHandler(context: sslContext, serverHostname: self.host) else {
+                        return channel.eventLoop.makeFailedFuture(ProxyError.connectionFailed(self.host))
+                    }
                     return channel.pipeline.addHandler(sslHandler).flatMap {
                         channel.pipeline.addHTTPClientHandlers()
                     }.flatMap {
@@ -446,7 +448,9 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
 
             ClientBootstrap(group: eventLoop)
                 .channelInitializer { channel in
-                    let sslHandler = try! NIOSSLClientHandler(context: sslContext, serverHostname: self.host)
+                    guard let sslHandler = try? NIOSSLClientHandler(context: sslContext, serverHostname: self.host) else {
+                        return channel.eventLoop.makeFailedFuture(ProxyError.connectionFailed(self.host))
+                    }
                     return channel.pipeline.addHandler(sslHandler).flatMap {
                         channel.pipeline.addHTTPClientHandlers()
                     }.flatMap {

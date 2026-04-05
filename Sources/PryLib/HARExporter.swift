@@ -12,7 +12,7 @@ public struct HARExporter {
 
             // Request
             let requestHeaders = req.requestHeaders.map { ["name": $0.0, "value": $0.1] }
-            let scheme = req.statusCode != nil ? "http" : "http"  // simplified
+            let scheme = Watchlist.matches(req.host) ? "https" : "http"
             let requestObj: [String: Any] = [
                 "method": req.method,
                 "url": "\(scheme)://\(req.host)\(req.url)",
