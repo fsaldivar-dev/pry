@@ -55,12 +55,11 @@ public class BreakpointStore {
     }
 
     private func matchesPattern(_ pattern: String, url: String, host: String) -> Bool {
-        // Glob-style matching
+        // Glob-style matching — escape regex special chars first
         if pattern.contains("*") {
-            let regex = pattern
-                .replacingOccurrences(of: ".", with: "\\.")
-                .replacingOccurrences(of: "*", with: ".*")
-            return (try? NSRegularExpression(pattern: "^\(regex)", options: []))
+            let escaped = NSRegularExpression.escapedPattern(for: pattern)
+            let globPattern = escaped.replacingOccurrences(of: "\\*", with: ".*")
+            return (try? NSRegularExpression(pattern: "^\(globPattern)", options: []))
                 .map { $0.firstMatch(in: url, range: NSRange(url.startIndex..., in: url)) != nil
                     || $0.firstMatch(in: host, range: NSRange(host.startIndex..., in: host)) != nil }
                 ?? false

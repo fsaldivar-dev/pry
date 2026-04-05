@@ -164,10 +164,10 @@ public struct RuleEngine {
 
     private static func matchesPattern(_ pattern: String, against url: String) -> Bool {
         if pattern.contains("*") {
-            let regex = pattern
-                .replacingOccurrences(of: ".", with: "\\.")
-                .replacingOccurrences(of: "*", with: ".*")
-            return (try? NSRegularExpression(pattern: "^\(regex)"))
+            // Escape all regex special chars first, then convert * to .*
+            let escaped = NSRegularExpression.escapedPattern(for: pattern)
+            let globPattern = escaped.replacingOccurrences(of: "\\*", with: ".*")
+            return (try? NSRegularExpression(pattern: "^\(globPattern)"))
                 .map { $0.firstMatch(in: url, range: NSRange(url.startIndex..., in: url)) != nil }
                 ?? false
         }

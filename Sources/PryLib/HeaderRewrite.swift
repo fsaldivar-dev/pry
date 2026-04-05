@@ -60,9 +60,10 @@ public struct HeaderRewrite {
     }
 
     private static func appendToFile(_ entry: String) {
-        if let handle = FileHandle(forWritingAtPath: headersFile) {
+        if let handle = FileHandle(forWritingAtPath: headersFile),
+           let data = entry.data(using: .utf8) {
             handle.seekToEndOfFile()
-            handle.write(entry.data(using: .utf8)!)
+            handle.write(data)
             handle.closeFile()
         } else {
             try? entry.write(toFile: headersFile, atomically: true, encoding: .utf8)
