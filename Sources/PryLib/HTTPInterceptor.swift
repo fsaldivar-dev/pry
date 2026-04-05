@@ -191,7 +191,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
 
         context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
-        context.close(promise: nil)
+        // Don't close client channel — allow next request on same connection
     }
 
     private func forwardRequest(context: ChannelHandlerContext, host: String, port: Int, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int = 0, connectHost: String? = nil) {
@@ -290,9 +290,7 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
                 let bodyStr = buf.readString(length: buf.readableBytes)
                 BodyPrinter.storeResponse(requestId: requestId, statusCode: statusCode, headers: [], body: bodyStr)
             }
-            clientChannel.writeAndFlush(NIOAny(HTTPServerResponsePart.end(trailers))).whenComplete { _ in
-                self.clientChannel.close(promise: nil)
-            }
+            clientChannel.writeAndFlush(NIOAny(HTTPServerResponsePart.end(trailers)), promise: nil)
             context.close(promise: nil)
         }
     }
