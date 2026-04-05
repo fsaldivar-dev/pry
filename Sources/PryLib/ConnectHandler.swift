@@ -556,7 +556,9 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
     private let clientChannel: Channel
     private let host: String
     private var contentType: String?
+    private var responseHead: NIOHTTP1.HTTPResponseHead?
     private var responseBody: ByteBuffer?
+    private var responseSent = false
 
     init(clientChannel: Channel, host: String) {
         self.clientChannel = clientChannel
@@ -570,29 +572,42 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
             BodyPrinter.printResponseHead(head, host: host, https: true)
             Config.appendLog("RESPONSE https://\(host) -> \(head.status.code)")
             contentType = head.headers["Content-Type"].first
+            responseHead = NIOHTTP1.HTTPResponseHead(version: head.version, status: head.status, headers: head.headers)
             responseBody = context.channel.allocator.buffer(capacity: 0)
-            let serverHead = NIOHTTP1.HTTPResponseHead(version: head.version, status: head.status, headers: head.headers)
-            clientChannel.write(NIOAny(HTTPServerResponsePart.head(serverHead)), promise: nil)
         case .body(var buffer):
             responseBody?.writeBuffer(&buffer)
-            clientChannel.write(NIOAny(HTTPServerResponsePart.body(.byteBuffer(buffer))), promise: nil)
-        case .end(let trailers):
-            if let body = responseBody {
-                BodyPrinter.printResponseBody(body, contentType: contentType)
-            }
-            clientChannel.writeAndFlush(NIOAny(HTTPServerResponsePart.end(trailers))).whenComplete { _ in
-                context.close(promise: nil)
-            }
+        case .end:
+            sendBufferedResponse(context: context)
         }
     }
 
+    /// Send the complete buffered response to the client in one flush
+    private func sendBufferedResponse(context: ChannelHandlerContext) {
+        guard !responseSent, let head = responseHead else { return }
+        responseSent = true
+
+        if let body = responseBody {
+            BodyPrinter.printResponseBody(body, contentType: contentType)
+        }
+
+        clientChannel.write(NIOAny(HTTPServerResponsePart.head(head)), promise: nil)
+        if let body = responseBody, body.readableBytes > 0 {
+            clientChannel.write(NIOAny(HTTPServerResponsePart.body(.byteBuffer(body))), promise: nil)
+        }
+        clientChannel.writeAndFlush(NIOAny(HTTPServerResponsePart.end(nil))).whenComplete { _ in
+            self.clientChannel.close(promise: nil)
+        }
+        context.close(promise: nil)
+    }
+
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        // uncleanShutdown is normal — servers often close without TLS goodbye
         if let sslError = error as? NIOSSLError, case .uncleanShutdown = sslError {
-            context.close(promise: nil)
+            // Server closed TLS without goodbye — send whatever we have
+            sendBufferedResponse(context: context)
             return
         }
         OutputBroker.shared.log(errText("!!! TLS response error from \(host): \(error)"))
+        clientChannel.close(promise: nil)
         context.close(promise: nil)
     }
 }

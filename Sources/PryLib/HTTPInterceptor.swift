@@ -257,8 +257,10 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
     private let host: String
     private let requestId: Int
     private var contentType: String?
+    private var responseHead: NIOHTTP1.HTTPResponseHead?
     private var responseBody: ByteBuffer?
     private var statusCode: UInt = 0
+    private var responseSent = false
 
     init(clientChannel: Channel, host: String, requestId: Int = 0) {
         self.clientChannel = clientChannel
@@ -275,29 +277,39 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
             BodyPrinter.printResponseHead(head, host: host)
             Config.appendLog("RESPONSE \(host) -> \(head.status.code)")
             contentType = head.headers["Content-Type"].first
+            responseHead = NIOHTTP1.HTTPResponseHead(version: head.version, status: head.status, headers: head.headers)
             responseBody = context.channel.allocator.buffer(capacity: 0)
-            let serverHead = NIOHTTP1.HTTPResponseHead(version: head.version, status: head.status, headers: head.headers)
-            clientChannel.write(NIOAny(HTTPServerResponsePart.head(serverHead)), promise: nil)
 
         case .body(var buffer):
             responseBody?.writeBuffer(&buffer)
-            clientChannel.write(NIOAny(HTTPServerResponsePart.body(.byteBuffer(buffer))), promise: nil)
 
-        case .end(let trailers):
-            if let body = responseBody {
-                BodyPrinter.printResponseBody(body, contentType: contentType)
-                var buf = body
-                let bodyStr = buf.readString(length: buf.readableBytes)
-                BodyPrinter.storeResponse(requestId: requestId, statusCode: statusCode, headers: [], body: bodyStr)
-            }
-            clientChannel.writeAndFlush(NIOAny(HTTPServerResponsePart.end(trailers)), promise: nil)
-            context.close(promise: nil)
+        case .end:
+            sendBufferedResponse(context: context)
         }
     }
 
-    func errorCaught(context: ChannelHandlerContext, error: Error) {
-        OutputBroker.shared.log(errText("!!! Response error from \(host): \(error)"))
-        clientChannel.close(promise: nil)
+    private func sendBufferedResponse(context: ChannelHandlerContext) {
+        guard !responseSent, let head = responseHead else { return }
+        responseSent = true
+
+        if let body = responseBody {
+            BodyPrinter.printResponseBody(body, contentType: contentType)
+            var buf = body
+            let bodyStr = buf.readString(length: buf.readableBytes)
+            BodyPrinter.storeResponse(requestId: requestId, statusCode: statusCode, headers: [], body: bodyStr)
+        }
+
+        clientChannel.write(NIOAny(HTTPServerResponsePart.head(head)), promise: nil)
+        if let body = responseBody, body.readableBytes > 0 {
+            clientChannel.write(NIOAny(HTTPServerResponsePart.body(.byteBuffer(body))), promise: nil)
+        }
+        clientChannel.writeAndFlush(NIOAny(HTTPServerResponsePart.end(nil))).whenComplete { _ in
+            self.clientChannel.close(promise: nil)
+        }
         context.close(promise: nil)
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        sendBufferedResponse(context: context)
     }
 }
