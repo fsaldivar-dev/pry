@@ -413,7 +413,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                     return channel.pipeline.addHandler(sslHandler).flatMap {
                         channel.pipeline.addHTTPClientHandlers()
                     }.flatMap {
-                        channel.pipeline.addHandler(TLSResponseForwarder(clientChannel: context.channel, host: self.host))
+                        channel.pipeline.addHandler(TLSResponseForwarder(clientChannel: context.channel, host: self.host, requestId: requestId))
                     }
                 }
                 .connect(host: connectHost, port: port)
@@ -555,14 +555,16 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
 
     private let clientChannel: Channel
     private let host: String
+    private let requestId: Int
     private var contentType: String?
     private var responseHead: NIOHTTP1.HTTPResponseHead?
     private var responseBody: ByteBuffer?
     private var responseSent = false
 
-    init(clientChannel: Channel, host: String) {
+    init(clientChannel: Channel, host: String, requestId: Int = 0) {
         self.clientChannel = clientChannel
         self.host = host
+        self.requestId = requestId
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -588,6 +590,10 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
 
         if let body = responseBody {
             BodyPrinter.printResponseBody(body, contentType: contentType)
+            var buf = body
+            let bodyStr = buf.readString(length: buf.readableBytes)
+            BodyPrinter.storeResponse(requestId: requestId, statusCode: UInt(head.status.code),
+                headers: head.headers.map { ($0.name, $0.value) }, body: bodyStr)
         }
 
         clientChannel.write(NIOAny(HTTPServerResponsePart.head(head)), promise: nil)
