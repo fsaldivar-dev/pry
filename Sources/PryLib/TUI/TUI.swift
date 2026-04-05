@@ -69,9 +69,9 @@ public class TUI {
             self?.storeChanged = true
         }
 
+        defer { cleanup() }
         renderSplash()
         runLoop()
-        cleanup()
     }
 
     public func stop() { running = false }

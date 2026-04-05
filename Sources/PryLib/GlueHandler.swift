@@ -1,7 +1,7 @@
 import NIOCore
 
 final class GlueHandler {
-    private var partner: GlueHandler?
+    private weak var partner: GlueHandler?
     private var context: ChannelHandlerContext?
     private var pendingRead: Bool = false
 
