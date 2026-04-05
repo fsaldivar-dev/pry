@@ -166,3 +166,31 @@ Y a veces el bug es un `if` vacío con un comentario que dice "esto no debería 
 - [apple/swift-nio-examples/connect-proxy](https://github.com/apple/swift-nio-examples/tree/main/connect-proxy)
 - [Swift Forums: HTTPRequestDecoder does not forward request](https://forums.swift.org/t/httprequestdecoder-does-not-forward-request/71484)
 - [Swift Forums: Adding and removing handlers](https://forums.swift.org/t/adding-and-removing-handlers/54915)
+
+---
+
+## Sesión 2026-04-04
+
+### El bug del body fantasma
+
+Descubrimos que las responses HTTPS llegaban vacías al cliente. curl reportaba `error 18: transfer closed with 255 bytes remaining` — el proxy interceptaba, logueaba el body completo, pero el cliente recibía 0 bytes.
+
+**Causa raíz**: SwiftNIO no flushea automáticamente. Escribíamos head y body con `write` (sin flush), y el `writeAndFlush` solo ocurría en `.end`. Pero httpbin.org cierra el TLS sin goodbye (`uncleanShutdown`), el `errorCaught` se disparaba antes del `.end`, y los bytes quedaban en el buffer.
+
+**Primer intento fallido**: agregar `Connection: close` al response. No funcionó — URLSession en iOS lo ignora.
+
+**Segundo intento fallido**: cerrar solo el canal remoto, no el del cliente. El proxy se saturaba porque el canal del cliente quedaba abierto indefinidamente.
+
+**Fix final**: bufferear la response completa (head + body) y enviarla de un golpe con `writeAndFlush`, igual que mitmproxy. Funciona porque el flush es atómico — todos los bytes se envían antes de que NIO cierre el canal.
+
+### El bug del "Waiting..."
+
+La TUI mostraba "Waiting..." en responses HTTPS incluso cuando el cliente ya había recibido la respuesta. Causa: `TLSResponseForwarder` no tenía `requestId`, así que nunca llamaba `storeResponse()`. La TUI lee del `RequestStore`, no del canal NIO. Dos flujos de datos, ambos necesitan ser alimentados.
+
+Fix: pasar `requestId` desde `handleDecryptedRequest()` a `TLSResponseForwarder` y llamar `storeResponse()` en `sendBufferedResponse()`.
+
+### SimulationPry
+
+Creamos una app iOS (SwiftUI) para testear Pry desde el Simulator. Botones para GET, POST, PUT, DELETE (HTTP y HTTPS), status codes (200, 404, 500), delays, headers, auth, y JSON bodies. El Simulator usa la red de la Mac — configurar proxy en WiFi settings intercepta el tráfico automáticamente.
+
+Requisito descubierto: `Info.plist` necesita `NSAllowsArbitraryLoads = true` para requests HTTP (ATS lo bloquea por default).

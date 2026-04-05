@@ -180,9 +180,88 @@ while idx < base64.endIndex {
 
 Tardamos en entender que el problema no estaba en la cadena de confianza, ni en las extensiones, ni en el algoritmo de firma — estaba en el largo de las líneas del archivo de texto. A veces el bug más oscuro es un número: 76 cuando debería ser 64.
 
+## El uncleanShutdown
+
+Todo funcionaba en el happy path. El proxy interceptaba, descifraba, logueaba el body completo en la TUI. Pero curl decía otra cosa:
+
+```
+curl: (18) transfer closed with 255 bytes remaining to read
+```
+
+El proxy veía el body. El cliente no recibía nada. Un fantasma.
+
+### La causa: write sin flush
+
+SwiftNIO no envía bytes cuando llamas `write()`. Los acumula en un buffer interno. Solo salen de verdad cuando llamas `flush()` o `writeAndFlush()`. Nuestro `TLSResponseForwarder` hacía esto:
+
+```swift
+// Esto NO envía nada todavía
+clientContext.write(wrapOutboundOut(.head(head)))
+clientContext.write(wrapOutboundOut(.body(body)))
+// Solo esto fuerza el envío
+clientContext.writeAndFlush(wrapOutboundOut(.end(nil)))
+```
+
+El plan era razonable: escribir head, body, y flushear todo junto en `.end`. Pero muchos servidores — httpbin.org entre ellos — cierran la conexión TLS sin enviar el `close_notify` de TLS. SwiftNIO lo reporta como `uncleanShutdown`. El `errorCaught` se disparaba antes de que llegara el `.end`, el canal se cerraba, y los bytes de head y body se quedaban en el buffer de NIO. Nunca salieron.
+
+### Lo que intentamos
+
+Primer intento: agregar `Connection: close` al response para que el cliente supiera que el servidor iba a cerrar. No funcionó — URLSession en iOS ignora ese header cuando le conviene.
+
+Segundo intento: cerrar solo el canal hacia el servidor remoto, no el del cliente. La idea era que el cliente pudiera seguir leyendo. El resultado fue peor — el canal del cliente se quedaba abierto indefinidamente, el proxy acumulaba canales zombis, y después de unas decenas de requests se saturaba.
+
+### El fix: bufferear todo
+
+La solución fue la misma que usa mitmproxy: no enviar nada al cliente hasta tener la response completa. Acumular head y body en memoria, y cuando llega el `.end` — o cuando llega el `uncleanShutdown` — enviar todo de un golpe con `writeAndFlush`.
+
+```mermaid
+sequenceDiagram
+    participant Server
+    participant Pry as Pry (streaming - roto)
+    participant Client
+
+    Server-->>Pry: .head (200 OK)
+    Pry->>Client: write(.head) — en buffer, NO enviado
+    Server-->>Pry: .body (255 bytes)
+    Pry->>Client: write(.body) — en buffer, NO enviado
+    Note over Server: cierra TLS sin close_notify
+    Server-->>Pry: errorCaught(uncleanShutdown)
+    Note over Pry: canal se cierra
+    Note over Client: 0 bytes recibidos ❌
+```
+
+Con el fix:
+
+```mermaid
+sequenceDiagram
+    participant Server
+    participant Pry as Pry (buffered - fix)
+    participant Client
+
+    Server-->>Pry: .head (200 OK)
+    Note over Pry: bufferedHead = head
+    Server-->>Pry: .body (255 bytes)
+    Note over Pry: bufferedBody += bytes
+    Note over Server: cierra TLS sin close_notify
+    Server-->>Pry: errorCaught(uncleanShutdown)
+    Note over Pry: detecta uncleanShutdown
+    Pry->>Client: writeAndFlush(head + body + end) — atómico
+    Note over Client: 255 bytes recibidos ✅
+```
+
+El `writeAndFlush` es atómico desde la perspectiva del canal — todos los bytes se entregan antes de que NIO procese el cierre. No importa que el servidor haya sido maleducado con el TLS. El cliente recibe su response completa.
+
+### Por qué pasa el uncleanShutdown
+
+El `close_notify` es parte del protocolo TLS. Antes de cerrar, ambos lados deberían enviar un alert de tipo `close_notify` para decir "terminé, cierro limpio". En la práctica, muchos servidores no lo hacen. Cierran el socket TCP directamente. Es más rápido, ahorra un round-trip, y los navegadores lo toleran sin problema.
+
+SwiftNIO es más estricto. Cuando no recibe el `close_notify`, genera un `NIOSSLError.uncleanShutdown`. Si tu handler trata eso como un error fatal y cierra el canal sin flushear, pierdes los bytes. La lección es que en TLS interception, el `uncleanShutdown` no es un error — es una condición normal que hay que manejar.
+
 ## Qué aprendimos
 
 TLS interception no es complicado en concepto pero tiene muchos detalles que hay que acertar todos a la vez. El certificado tiene que tener SAN. El PEM tiene que tener líneas de 64 caracteres. El CA tiene que estar instalado y habilitado. El pipeline de NIO tiene que transformarse en el orden correcto.
+
+El `uncleanShutdown` es el detalle que no aparece en ningún tutorial. Todo funciona perfecto en tests locales donde el servidor cierra limpio. En producción, contra servidores reales, la mitad cierra sin `close_notify`. Si no buffereas la response, pierdes bytes silenciosamente. No hay error visible — solo un cliente que recibe 0 bytes y un proxy que jura que todo está bien.
 
 El certificate pinning es un límite duro. No hay workaround honesto. La decisión correcta es documentarlo, excluir esos dominios, y seguir adelante.
 

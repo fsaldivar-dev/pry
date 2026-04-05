@@ -196,6 +196,28 @@ No resolvimos esto perfectamente. Usamos emojis de ancho conocido y ajustamos el
 
 **Un write() atomico evita flickering.** Construir el frame completo en un string y escribirlo de una vez a stdout es la diferencia entre una TUI que se siente solida y una que parpadea.
 
+## Los dos flujos de datos
+
+Pry tiene dos caminos para los datos de una response HTTPS interceptada. El primero es el canal NIO: los bytes van del servidor remoto, pasan por `TLSResponseForwarder`, y se escriben de vuelta al canal del cliente. El segundo es el `RequestStore`: la TUI lee de ahi para mostrar requests y responses en los paneles.
+
+Son flujos independientes. El canal NIO mueve bytes. El `RequestStore` guarda metadatos. Ambos necesitan ser alimentados.
+
+```mermaid
+graph TD
+    A[TLSResponseForwarder] -->|writeAndFlush| B[Canal NIO del cliente]
+    A -->|storeResponse| C[RequestStore]
+    B --> D[curl / URLSession recibe bytes]
+    C --> E[TUI lee y renderiza]
+```
+
+El bug del "Waiting..." aparecio cuando el primer flujo funcionaba perfecto pero el segundo no existia. `TLSResponseForwarder` reenviaba la response al cliente --- curl recibia el JSON completo --- pero nunca llamaba `storeResponse()` porque no tenia el `requestId`. Sin `requestId`, no habia forma de asociar la response con el request en el store. La TUI seguia mostrando "Waiting..." porque desde su perspectiva, la response nunca llego.
+
+El fix fue pasar `requestId` desde `handleDecryptedRequest()` hasta `TLSResponseForwarder`. Cuando `sendBufferedResponse()` envia los bytes al cliente, tambien llama `RequestStore.shared.storeResponse(id: requestId, ...)`. Ahora ambos flujos se alimentan desde el mismo punto.
+
+Lo interesante es que este bug no se manifesto en HTTP. Los requests HTTP pasan por `HTTPInterceptor`, que ya tenia la logica de `storeResponse()` desde el principio. Solo las responses HTTPS interceptadas usaban `TLSResponseForwarder` --- un handler distinto, escrito despues, que nadie penso en conectar al store.
+
+Es el tipo de bug que solo aparece cuando tienes dos subsistemas que evolucionan por separado. Cada uno funciona perfecto en aislamiento. El problema es el cable que falta entre ellos.
+
 ---
 
 Siguiente: [Features que nadie pidio](09-features-avanzadas.md)
