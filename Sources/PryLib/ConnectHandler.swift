@@ -581,15 +581,18 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
                 BodyPrinter.printResponseBody(body, contentType: contentType)
             }
             clientChannel.writeAndFlush(NIOAny(HTTPServerResponsePart.end(trailers))).whenComplete { _ in
-                self.clientChannel.close(promise: nil)
+                context.close(promise: nil)
             }
-            context.close(promise: nil)
         }
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
+        // uncleanShutdown is normal — servers often close without TLS goodbye
+        if let sslError = error as? NIOSSLError, case .uncleanShutdown = sslError {
+            context.close(promise: nil)
+            return
+        }
         OutputBroker.shared.log(errText("!!! TLS response error from \(host): \(error)"))
-        clientChannel.close(promise: nil)
         context.close(promise: nil)
     }
 }
