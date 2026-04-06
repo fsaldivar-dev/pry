@@ -65,11 +65,14 @@ struct DetailPanelView: View {
                 }
             }
         } else {
-            ContentUnavailableView(
-                "Select a Request",
-                systemImage: "cursorarrow.click",
-                description: Text("Choose a request from the list to inspect its details")
-            )
+            HStack(spacing: 6) {
+                Image(systemName: "cursorarrow.click")
+                    .foregroundStyle(.tertiary)
+                Text("Select a request to inspect")
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

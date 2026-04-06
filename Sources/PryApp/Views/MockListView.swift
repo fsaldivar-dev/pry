@@ -4,6 +4,7 @@ import PryKit
 @available(macOS 14, *)
 @MainActor
 struct MockListView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(MockManager.self) private var mockManager
     @State private var showEditor = false
     @State private var editingPath: String?
@@ -31,6 +32,9 @@ struct MockListView: View {
                     }
                     .help("Clear All Mocks")
                 }
+
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

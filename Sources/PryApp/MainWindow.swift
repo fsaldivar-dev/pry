@@ -20,9 +20,9 @@ struct MainWindow: View {
             }
 
             HSplitView {
-                // Left sidebar: SSL domains
+                // Left sidebar: source filter
                 SourceListView()
-                    .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
+                    .frame(minWidth: 160, idealWidth: 200, maxWidth: 260)
 
                 // Right: request list on top, detail panel on bottom
                 VSplitView {
@@ -33,7 +33,7 @@ struct MainWindow: View {
                     .frame(minHeight: 180)
 
                     DetailPanelView()
-                        .frame(minHeight: 150, idealHeight: 300)
+                        .frame(minHeight: 120, idealHeight: 280)
                 }
             }
 
