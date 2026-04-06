@@ -10,6 +10,13 @@ struct PryApp: App {
     @State private var mockManager = MockManager()
     @State private var breakpointManager = BreakpointUIManager()
 
+    init() {
+        // Ensure the app activates as a regular foreground app even when
+        // launched from the command line (e.g. `PryApp &`).
+        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

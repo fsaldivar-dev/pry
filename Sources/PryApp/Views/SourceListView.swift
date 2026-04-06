@@ -78,7 +78,8 @@ struct SourceListView: View {
                         }
                     } label: {
                         Label {
-                            Text(group.id.isEmpty ? "Unknown" : group.id)
+                            Text(group.id.isEmpty ? "Unknown" : group.id == "tunnel" ? "Passthrough (tunnel)" : group.id)
+                                .foregroundStyle(group.id == "tunnel" ? .secondary : .primary)
                         } icon: {
                             Text(group.icon)
                         }
@@ -103,9 +104,20 @@ struct SourceListView: View {
 
     static func computeGrouped(_ requests: [RequestStore.CapturedRequest]) -> [AppGroup] {
         let byApp = Dictionary(grouping: requests, by: \.appName)
-        return byApp.keys.sorted().map { app in
+        // Sort apps alphabetically but push "tunnel" to the end
+        let sortedKeys = byApp.keys.sorted { a, b in
+            if a == "tunnel" { return false }
+            if b == "tunnel" { return true }
+            return a.localizedCaseInsensitiveCompare(b) == .orderedAscending
+        }
+        return sortedKeys.map { app in
             let reqs = byApp[app]!
-            let icon = reqs.first?.appIcon ?? "📱"
+            let icon: String
+            if app == "tunnel" {
+                icon = "🔒"
+            } else {
+                icon = reqs.first?.appIcon ?? "📱"
+            }
             let byHost = Dictionary(grouping: reqs, by: \.host)
             let hosts = byHost.keys.sorted().map { host in
                 AppGroup.HostEntry(host: host, count: byHost[host]!.count)

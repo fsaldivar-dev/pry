@@ -17,26 +17,31 @@ struct RequestListView: NSViewRepresentable {
         let scrollView = NSScrollView()
         let tableView = NSTableView()
 
-        let columns: [(String, String, CGFloat)] = [
-            ("icon", "", 30),
-            ("method", "Method", 60),
-            ("status", "Status", 55),
-            ("host", "Host", 180),
-            ("path", "Path", 250),
-            ("time", "Time", 65),
-            ("duration", "Duration", 72),
+        // (id, title, width, resizes?)
+        let columns: [(String, String, CGFloat, Bool)] = [
+            ("icon",     "",         28,  false),
+            ("method",   "Method",   52,  false),
+            ("status",   "Status",   48,  false),
+            ("host",     "Host",     140, false),
+            ("path",     "Path",     200, true),   // stretches to fill
+            ("duration", "Duration", 64,  false),
+            ("time",     "Time",     60,  false),
         ]
-        for (id, title, width) in columns {
+        for (id, title, width, resizes) in columns {
             let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
             col.title = title
             col.width = width
-            col.minWidth = id == "icon" ? 30 : 40
+            col.minWidth = id == "icon" ? 28 : 36
+            col.resizingMask = resizes ? .autoresizingMask : .userResizingMask
             tableView.addTableColumn(col)
         }
+        // Path stretches; fixed columns don't shrink below their width
+        tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        tableView.sizeLastColumnToFit()
 
         tableView.delegate = context.coordinator
         tableView.dataSource = context.coordinator
-        tableView.usesAlternatingRowBackgroundColors = true
+        tableView.usesAlternatingRowBackgroundColors = false
         tableView.allowsMultipleSelection = false
         tableView.style = .inset
         tableView.target = context.coordinator
@@ -78,6 +83,8 @@ struct RequestListView: NSViewRepresentable {
            let idx = newRequests.firstIndex(where: { $0.id == id }) {
             coordinator.tableView?.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
         }
+
+        coordinator.tableView?.sizeLastColumnToFit()
     }
 
     @MainActor
@@ -147,7 +154,16 @@ struct RequestListView: NSViewRepresentable {
         }
 
         @objc func tableViewClicked(_ sender: NSTableView) {
-            let row = sender.selectedRow
+            updateSelection(sender)
+        }
+
+        func tableViewSelectionDidChange(_ notification: Notification) {
+            guard let tv = notification.object as? NSTableView else { return }
+            updateSelection(tv)
+        }
+
+        private func updateSelection(_ tableView: NSTableView) {
+            let row = tableView.selectedRow
             if row >= 0, row < requests.count {
                 let req = requests[row]
                 selectedId = req.id
