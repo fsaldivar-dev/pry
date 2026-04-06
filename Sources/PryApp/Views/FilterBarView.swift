@@ -5,6 +5,7 @@ import PryKit
 @MainActor
 struct FilterBarView: View {
     @Environment(RequestStoreWrapper.self) private var store
+    @FocusState private var searchFocused: Bool
 
     private let methods = ["GET", "POST", "PUT", "DELETE", "PATCH"]
     private let statusRanges: [(label: String, range: ClosedRange<UInt>)] = [
@@ -50,6 +51,7 @@ struct FilterBarView: View {
                 TextField("Filter...", text: $store.filterText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 11))
+                    .focused($searchFocused)
                 if !store.filterText.isEmpty {
                     Button {
                         store.filterText = ""
@@ -86,5 +88,11 @@ struct FilterBarView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(.bar)
+        // Cmd+F focuses the search field
+        .onKeyPress(.init("f"), phases: .down) { event in
+            guard event.modifiers.contains(.command) else { return .ignored }
+            searchFocused = true
+            return .handled
+        }
     }
 }

@@ -22,8 +22,9 @@ struct StatusBarView: View {
             Label(":\(proxy.port)", systemImage: "network")
                 .font(.caption)
 
-            Label("\(proxy.domains.count) domains", systemImage: "globe")
+            Label("\(proxy.domains.count) SSL domains", systemImage: "lock.shield")
                 .font(.caption)
+                .help("Domains with HTTPS interception enabled")
 
             if mocks.mocks.count > 0 {
                 Label("\(mocks.mocks.count) mocks", systemImage: "theatermask.and.paintbrush")

@@ -90,6 +90,16 @@ public final class RequestStoreWrapper {
         return result
     }
 
+    // MARK: - Public actions
+
+    /// Clear all captured requests and reset selection.
+    public func clear() {
+        store.clear()
+        requests = []
+        selectedRequest = nil
+        invalidateFilterCache()
+    }
+
     // MARK: - Init
 
     public init(store: RequestStore = .shared) {
