@@ -20,6 +20,11 @@ struct PryApp: App {
         }
         .defaultSize(width: 1200, height: 800)
 
+        Settings {
+            SettingsView()
+                .environment(proxyManager)
+        }
+
         MenuBarExtra("Pry", systemImage: "cat.fill") {
             PryMenuBarContent()
                 .environment(proxyManager)
