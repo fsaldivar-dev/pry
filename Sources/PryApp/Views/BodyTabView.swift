@@ -35,6 +35,7 @@ private struct BodySection: View {
 
     @State private var formattedText: String = ""
     @State private var isTruncated: Bool = false
+    @State private var isJSON: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -43,13 +44,19 @@ private struct BodySection: View {
                 .padding(.bottom, 4)
 
             if content != nil, !formattedText.isEmpty {
-                Text(formattedText)
-                    .font(.system(size: 11, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                if isJSON {
+                    JSONSyntaxView(json: formattedText, alreadyFormatted: true)
+                        .frame(maxHeight: 400)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                } else {
+                    Text(formattedText)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
 
                 if isTruncated {
                     Text("Body truncated, showing first \(maxSize / 1000)KB")
@@ -73,11 +80,18 @@ private struct BodySection: View {
             }
             isTruncated = text.count > maxSize
             let truncated = String(text.prefix(maxSize))
-            // Move JSON serialization off the Main Thread
-            formattedText = await Task.detached {
-                Self.formatBody(truncated)
+            // Check if JSON, then format off Main Thread
+            let result = await Task.detached {
+                (Self.formatBody(truncated), Self.checkJSON(truncated))
             }.value
+            formattedText = result.0
+            isJSON = result.1
         }
+    }
+
+    private nonisolated static func checkJSON(_ text: String) -> Bool {
+        guard let data = text.data(using: .utf8) else { return false }
+        return (try? JSONSerialization.jsonObject(with: data)) != nil
     }
 
     /// Pretty-print JSON if valid, otherwise return as-is.
