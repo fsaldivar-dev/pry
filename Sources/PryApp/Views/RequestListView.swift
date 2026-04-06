@@ -46,29 +46,38 @@ struct RequestListView: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        let newRequests = store.filteredRequests
         let coordinator = context.coordinator
         coordinator.store = store
 
-        // Only reload if data actually changed
-        if coordinator.requests.count != newRequests.count ||
-           coordinator.requests.last?.id != newRequests.last?.id {
-            let selectedId = coordinator.selectedId
-            coordinator.requests = newRequests
-            coordinator.tableView?.reloadData()
+        let newRequests = store.filteredRequests
 
-            // Restore selection
-            if let id = selectedId,
-               let idx = newRequests.firstIndex(where: { $0.id == id }) {
-                coordinator.tableView?.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
+        // Compare by content signature — detects status updates, not just count
+        let needsReload: Bool = {
+            guard newRequests.count == coordinator.requests.count else { return true }
+            for (new, old) in zip(newRequests, coordinator.requests) {
+                if new.id != old.id || new.statusCode != old.statusCode { return true }
             }
+            return false
+        }()
+        guard needsReload else { return }
+
+        let selectedId = coordinator.selectedId
+        coordinator.requests = newRequests
+        coordinator.tableView?.reloadData()
+
+        // Restore selection after reload
+        if let id = selectedId,
+           let idx = newRequests.firstIndex(where: { $0.id == id }) {
+            coordinator.tableView?.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
         }
     }
 
     @MainActor
     final class Coordinator: NSObject, NSTableViewDelegate, NSTableViewDataSource {
         var requests: [RequestStore.CapturedRequest] = []
-        var store: RequestStoreWrapper
+        // Weak reference to avoid retaining an obsolete store when SwiftUI
+        // recreates the representable but the NSView persists.
+        weak var store: RequestStoreWrapper?
         var selectedId: Int?
         weak var tableView: NSTableView?
 
@@ -84,9 +93,10 @@ struct RequestListView: NSViewRepresentable {
             guard row < requests.count, let colId = tableColumn?.identifier.rawValue else { return nil }
             let req = requests[row]
 
-            let cell = tableView.makeView(withIdentifier: NSUserInterfaceItemIdentifier(colId), owner: nil) as? NSTextField
+            let cellId = NSUserInterfaceItemIdentifier(colId)
+            let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? NSTextField
                 ?? NSTextField(labelWithString: "")
-            cell.identifier = NSUserInterfaceItemIdentifier(colId)
+            cell.identifier = cellId
             cell.lineBreakMode = .byTruncatingTail
 
             switch colId {
@@ -120,10 +130,10 @@ struct RequestListView: NSViewRepresentable {
             if row >= 0, row < requests.count {
                 let req = requests[row]
                 selectedId = req.id
-                store.selectedRequest = req
+                store?.selectedRequest = req
             } else {
                 selectedId = nil
-                store.selectedRequest = nil
+                store?.selectedRequest = nil
             }
         }
 

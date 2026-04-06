@@ -27,8 +27,7 @@ public final class ProxyManager {
     }
 
     public func stop() {
-        serverBox.server?.shutdown()
-        serverBox.server = nil
+        serverBox.shutdownIfNeeded()
         isRunning = false
     }
 
@@ -47,11 +46,25 @@ public final class ProxyManager {
     }
 
     deinit {
-        serverBox.server?.shutdown()
+        serverBox.shutdownIfNeeded()
     }
 }
 
-/// Non-isolated box to hold ProxyServer reference, enabling deinit access.
-private final class ServerBox: Sendable {
-    nonisolated(unsafe) var server: ProxyServer?
+/// Thread-safe box to hold ProxyServer reference, enabling deinit access
+/// without violating MainActor isolation.
+private final class ServerBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _server: ProxyServer?
+
+    var server: ProxyServer? {
+        get { lock.withLock { _server } }
+        set { lock.withLock { _server = newValue } }
+    }
+
+    func shutdownIfNeeded() {
+        lock.withLock {
+            _server?.shutdown()
+            _server = nil
+        }
+    }
 }

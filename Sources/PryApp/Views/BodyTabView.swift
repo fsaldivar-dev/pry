@@ -33,18 +33,17 @@ private struct BodySection: View {
     let content: String?
     let maxSize: Int
 
+    @State private var formattedText: String = ""
+    @State private var isTruncated: Bool = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.headline)
                 .padding(.bottom, 4)
 
-            if let bodyText = content, !bodyText.isEmpty {
-                let displayed = bodyText.count > maxSize
-                    ? String(bodyText.prefix(maxSize))
-                    : bodyText
-
-                Text(Self.formatBody(displayed))
+            if content != nil, !formattedText.isEmpty {
+                Text(formattedText)
                     .font(.system(size: 11, design: .monospaced))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -52,21 +51,37 @@ private struct BodySection: View {
                     .background(Color(nsColor: .textBackgroundColor))
                     .clipShape(RoundedRectangle(cornerRadius: 4))
 
-                if bodyText.count > maxSize {
+                if isTruncated {
                     Text("Body truncated, showing first \(maxSize / 1000)KB")
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
-            } else {
+            } else if content == nil || content!.isEmpty {
                 Text("No body")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
             }
+        }
+        .task(id: content) {
+            guard let text = content, !text.isEmpty else {
+                formattedText = ""
+                isTruncated = false
+                return
+            }
+            isTruncated = text.count > maxSize
+            let truncated = String(text.prefix(maxSize))
+            // Move JSON serialization off the Main Thread
+            formattedText = await Task.detached {
+                Self.formatBody(truncated)
+            }.value
         }
     }
 
     /// Pretty-print JSON if valid, otherwise return as-is.
-    private static func formatBody(_ text: String) -> String {
+    private nonisolated static func formatBody(_ text: String) -> String {
         guard let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data),
               let pretty = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),

@@ -5,6 +5,7 @@ import PryKit
 struct PryMenuBarContent: View {
     @Environment(ProxyManager.self) private var proxy
     @Environment(RequestStoreWrapper.self) private var store
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -21,8 +22,20 @@ struct PryMenuBarContent: View {
                 if proxy.isRunning {
                     proxy.stop()
                 } else {
-                    try? proxy.start()
+                    do {
+                        try proxy.start()
+                        errorMessage = nil
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
                 }
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
             }
 
             Divider()
