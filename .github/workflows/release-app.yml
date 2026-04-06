@@ -1,0 +1,73 @@
+name: Release App
+
+on:
+  push:
+    tags: ["app-v*"]
+
+jobs:
+  build-dmg:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#app-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build/repositories
+            .build/checkouts
+            .build/artifacts
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build App Bundle
+        run: |
+          chmod +x scripts/build-app.sh
+          ./scripts/build-app.sh "${{ steps.version.outputs.version }}"
+
+      - name: Package DMG
+        run: |
+          chmod +x scripts/package-dmg.sh
+          ./scripts/package-dmg.sh "${{ steps.version.outputs.version }}"
+
+      - name: Generate checksums
+        run: |
+          cd build
+          shasum -a 256 Pry-*.dmg > checksums-app.txt
+          cat checksums-app.txt
+
+      # TODO: Code signing + notarization steps
+      # Requires APPLE_DEVELOPER_ID_CERT, APPLE_ID, TEAM_ID, APP_PASSWORD secrets
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Pry App v${{ steps.version.outputs.version }}"
+          body: |
+            ## Pry App v${{ steps.version.outputs.version }}
+
+            ### Installation
+
+            **DMG (drag to Applications):**
+            ```
+            Download Pry-${{ steps.version.outputs.version }}.dmg below
+            ```
+
+            **Homebrew Cask:**
+            ```bash
+            brew tap fsaldivar-dev/pry
+            brew install --cask pry-app
+            ```
+
+            ### Requirements
+            - macOS 14 (Sonoma) or later
+
+            > ⚠️ This release is not code-signed or notarized yet.
+            > You may need to right-click → Open on first launch.
+          files: |
+            build/Pry-*.dmg
+            build/checksums-app.txt
