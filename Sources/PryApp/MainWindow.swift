@@ -8,10 +8,20 @@ struct MainWindow: View {
     @Environment(ProxyManager.self) private var proxy
     @Environment(RequestStoreWrapper.self) private var store
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @Environment(BreakpointUIManager.self) private var breakpoints
     @State private var showMocks = false
+    @State private var showBreakpoints = false
+    @State private var showRules = false
+    @State private var showDiff = false
+    @State private var diffRequestA: RequestStore.CapturedRequest?
 
     var body: some View {
         VStack(spacing: 0) {
+            // Paused request banner
+            if let paused = breakpoints.pausedRequests.first {
+                PausedRequestBanner(method: paused.method, url: paused.url)
+            }
+
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 SourceListView()
                     .navigationSplitViewColumnWidth(min: 180, ideal: 220)
@@ -42,10 +52,34 @@ struct MainWindow: View {
                         Text("Mocks")
                     }
                 }
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        showBreakpoints.toggle()
+                    } label: {
+                        Image(systemName: "pause.circle")
+                        Text("Breakpoints")
+                    }
+                }
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        showRules.toggle()
+                    } label: {
+                        Image(systemName: "list.bullet.rectangle")
+                        Text("Rules")
+                    }
+                }
             }
             .sheet(isPresented: $showMocks) {
                 MockListView()
                     .frame(minWidth: 500, minHeight: 400)
+            }
+            .sheet(isPresented: $showBreakpoints) {
+                BreakpointListView()
+                    .frame(minWidth: 500, minHeight: 400)
+            }
+            .sheet(isPresented: $showRules) {
+                RulesEditorView()
+                    .frame(minWidth: 600, minHeight: 500)
             }
 
             StatusBarView()
