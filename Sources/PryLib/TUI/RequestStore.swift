@@ -7,7 +7,7 @@ public class RequestStore {
     private let queue = DispatchQueue(label: "pry.requeststore")
     private var entries: [CapturedRequest] = []
     private let maxEntries = 500
-    var onChange: (() -> Void)?
+    public var onChange: (() -> Void)?
 
     private struct CodableHeader: Codable {
         let name: String
@@ -165,7 +165,7 @@ public class RequestStore {
         queue.sync { entries.count }
     }
 
-    func clear() {
+    public func clear() {
         queue.sync {
             entries.removeAll()
             nextId = 1
@@ -219,13 +219,13 @@ public class RequestStore {
 
     // MARK: - Filter & Search
 
-    func filter(method: String) -> [CapturedRequest] {
+    public func filter(method: String) -> [CapturedRequest] {
         queue.sync {
             entries.filter { $0.method.uppercased() == method.uppercased() }
         }
     }
 
-    func filter(statusRange: ClosedRange<UInt>) -> [CapturedRequest] {
+    public func filter(statusRange: ClosedRange<UInt>) -> [CapturedRequest] {
         queue.sync {
             entries.filter { req in
                 guard let code = req.statusCode else { return false }
@@ -234,7 +234,7 @@ public class RequestStore {
         }
     }
 
-    func search(_ text: String) -> [CapturedRequest] {
+    public func search(_ text: String) -> [CapturedRequest] {
         let lower = text.lowercased()
         return queue.sync {
             entries.filter { req in

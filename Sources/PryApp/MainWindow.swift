@@ -1,0 +1,49 @@
+import SwiftUI
+import PryKit
+import PryLib
+
+@available(macOS 14, *)
+struct MainWindow: View {
+    @Environment(ProxyManager.self) private var proxy
+    @Environment(RequestStoreWrapper.self) private var store
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+
+    var body: some View {
+        VStack(spacing: 0) {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                SourceListView()
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 220)
+            } content: {
+                RequestListView()
+                    .navigationSplitViewColumnWidth(min: 300, ideal: 450)
+            } detail: {
+                RequestDetailView()
+            }
+            .navigationTitle("Pry")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        toggleProxy()
+                    } label: {
+                        Image(systemName: proxy.isRunning ? "stop.fill" : "play.fill")
+                        Text(proxy.isRunning ? "Stop" : "Start")
+                    }
+                }
+            }
+
+            StatusBarView()
+        }
+    }
+
+    private func toggleProxy() {
+        if proxy.isRunning {
+            proxy.stop()
+        } else {
+            do {
+                try proxy.start()
+            } catch {
+                print("Failed to start proxy: \(error)")
+            }
+        }
+    }
+}
