@@ -8,6 +8,7 @@ let package = Package(
     products: [
         .executable(name: "pry", targets: ["Pry"]),
         .library(name: "PryLib", targets: ["PryLib"]),
+        .library(name: "PryKit", targets: ["PryKit"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.62.0"),
@@ -27,6 +28,16 @@ let package = Package(
             ],
             path: "Sources/PryLib"
         ),
+        .target(
+            name: "PryKit",
+            dependencies: ["PryLib"],
+            path: "Sources/PryKit"
+        ),
+        .executableTarget(
+            name: "PryApp",
+            dependencies: ["PryKit"],
+            path: "Sources/PryApp"
+        ),
         .executableTarget(
             name: "Pry",
             dependencies: ["PryLib"],
@@ -36,6 +47,11 @@ let package = Package(
             name: "PryLibTests",
             dependencies: ["PryLib"],
             path: "Tests/PryLibTests"
+        ),
+        .testTarget(
+            name: "PryKitTests",
+            dependencies: ["PryKit"],
+            path: "Tests/PryKitTests"
         ),
     ]
 )
