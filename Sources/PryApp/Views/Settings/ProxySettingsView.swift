@@ -42,6 +42,25 @@ struct ProxySettingsView: View {
                 .disabled(portError != nil || portText.isEmpty)
             }
 
+            Section("System Proxy") {
+                HStack {
+                    Toggle("Configure system proxy automatically", isOn: .constant(proxy.systemProxyEnabled))
+                    if proxy.systemProxyEnabled {
+                        Label("Active", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                }
+                Text("When enabled, macOS routes HTTP/HTTPS traffic through Pry automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let service = SystemProxy.activeNetworkService() {
+                    LabeledContent("Network Interface", value: service)
+                        .font(.caption)
+                }
+            }
+
             Section("Startup") {
                 Toggle("Auto-start proxy on launch", isOn: $autoStart)
                 Text("Proxy will start automatically when PryApp opens")
