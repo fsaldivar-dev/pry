@@ -2,6 +2,8 @@ import SwiftUI
 import PryKit
 import PryLib
 
+private let maxVisibleHosts = 5
+
 /// A group of requests from a single app, with sub-groups by host.
 struct AppGroup: Identifiable, Equatable {
     let id: String // appName
@@ -21,6 +23,8 @@ struct AppGroup: Identifiable, Equatable {
 struct SourceListView: View {
     @Environment(RequestStoreWrapper.self) private var store
     @State private var grouped: [AppGroup] = []
+    /// Tracks which app groups are expanded to show all hosts (beyond maxVisibleHosts).
+    @State private var expandedGroups: Set<String> = []
 
     var body: some View {
         @Bindable var store = store
@@ -39,12 +43,38 @@ struct SourceListView: View {
 
                 ForEach(grouped) { group in
                     DisclosureGroup {
-                        ForEach(group.hosts) { entry in
+                        let isExpanded = expandedGroups.contains(group.id)
+                        let visibleHosts = isExpanded
+                            ? group.hosts
+                            : Array(group.hosts.prefix(maxVisibleHosts))
+                        let hiddenCount = group.hosts.count - visibleHosts.count
+
+                        ForEach(visibleHosts) { entry in
                             Label(entry.host, systemImage: "globe")
                                 .badge(entry.count)
                                 .tag(SourceFilter.host(app: group.id, host: entry.host))
                                 .lineLimit(1)
                                 .truncationMode(.middle)
+                        }
+
+                        if hiddenCount > 0 {
+                            Button {
+                                expandedGroups.insert(group.id)
+                            } label: {
+                                Text("\(hiddenCount) more…")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                        } else if isExpanded && group.hosts.count > maxVisibleHosts {
+                            Button {
+                                expandedGroups.remove(group.id)
+                            } label: {
+                                Text("Show less")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.borderless)
                         }
                     } label: {
                         Label {
