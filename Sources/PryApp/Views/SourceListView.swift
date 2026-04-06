@@ -17,6 +17,7 @@ struct AppGroup: Identifiable, Equatable {
 }
 
 @available(macOS 14, *)
+@MainActor
 struct SourceListView: View {
     @Environment(RequestStoreWrapper.self) private var store
     @State private var grouped: [AppGroup] = []

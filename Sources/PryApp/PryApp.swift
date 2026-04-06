@@ -2,6 +2,7 @@ import SwiftUI
 import PryKit
 
 @available(macOS 14, *)
+@MainActor
 @main
 struct PryApp: App {
     @State private var proxyManager = ProxyManager()
