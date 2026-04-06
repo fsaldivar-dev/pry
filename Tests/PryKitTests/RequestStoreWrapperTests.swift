@@ -1,54 +1,53 @@
-import Testing
+import XCTest
 @testable import PryLib
 @testable import PryKit
 
-@Suite("RequestStoreWrapper")
-struct RequestStoreWrapperTests {
+@available(macOS 14, *)
+final class RequestStoreWrapperTests: XCTestCase {
 
-    @available(macOS 14, *)
-    @Test func updatesOnChange() async throws {
+    @MainActor
+    func testUpdatesOnChange() async throws {
         let store = RequestStore()
-        let wrapper = await RequestStoreWrapper(store: store)
+        let wrapper = RequestStoreWrapper(store: store)
 
         _ = store.addRequest(method: "GET", url: "/test", host: "example.com",
                              appIcon: "🌐", appName: "test", headers: [], body: nil)
 
-        // Wait for MainActor dispatch
         try await Task.sleep(for: .milliseconds(100))
-        #expect(await wrapper.requests.count == 1)
+        XCTAssertEqual(wrapper.requests.count, 1)
     }
 
-    @available(macOS 14, *)
-    @Test func filteredRequestsByMethod() async throws {
+    @MainActor
+    func testFilteredRequestsByMethod() async throws {
         let store = RequestStore()
-        let wrapper = await RequestStoreWrapper(store: store)
+        let wrapper = RequestStoreWrapper(store: store)
 
         _ = store.addRequest(method: "GET", url: "/a", host: "h", appIcon: "", appName: "", headers: [], body: nil)
         _ = store.addRequest(method: "POST", url: "/b", host: "h", appIcon: "", appName: "", headers: [], body: nil)
         _ = store.addRequest(method: "GET", url: "/c", host: "h", appIcon: "", appName: "", headers: [], body: nil)
 
         try await Task.sleep(for: .milliseconds(100))
-        await MainActor.run { wrapper.filterMethod = "POST" }
-        #expect(await wrapper.filteredRequests.count == 1)
+        wrapper.filterMethod = "POST"
+        XCTAssertEqual(wrapper.filteredRequests.count, 1)
     }
 
-    @available(macOS 14, *)
-    @Test func filteredRequestsBySearch() async throws {
+    @MainActor
+    func testFilteredRequestsBySearch() async throws {
         let store = RequestStore()
-        let wrapper = await RequestStoreWrapper(store: store)
+        let wrapper = RequestStoreWrapper(store: store)
 
         _ = store.addRequest(method: "GET", url: "/api/users", host: "api.com", appIcon: "", appName: "", headers: [], body: nil)
         _ = store.addRequest(method: "GET", url: "/other", host: "other.com", appIcon: "", appName: "", headers: [], body: nil)
 
         try await Task.sleep(for: .milliseconds(100))
-        await MainActor.run { wrapper.filterText = "users" }
-        #expect(await wrapper.filteredRequests.count == 1)
+        wrapper.filterText = "users"
+        XCTAssertEqual(wrapper.filteredRequests.count, 1)
     }
 
-    @available(macOS 14, *)
-    @Test func filteredRequestsCombined() async throws {
+    @MainActor
+    func testFilteredRequestsCombined() async throws {
         let store = RequestStore()
-        let wrapper = await RequestStoreWrapper(store: store)
+        let wrapper = RequestStoreWrapper(store: store)
 
         _ = store.addRequest(method: "GET", url: "/api/users", host: "api.com", appIcon: "", appName: "", headers: [], body: nil)
         store.updateResponse(id: 1, statusCode: 200, headers: [], body: nil)
@@ -58,12 +57,10 @@ struct RequestStoreWrapperTests {
         store.updateResponse(id: 3, statusCode: 404, headers: [], body: nil)
 
         try await Task.sleep(for: .milliseconds(100))
-        await MainActor.run {
-            wrapper.filterMethod = "GET"
-            wrapper.filterText = "users"
-        }
-        let results = await wrapper.filteredRequests
-        #expect(results.count == 1)
-        #expect(results.first?.url == "/api/users")
+        wrapper.filterMethod = "GET"
+        wrapper.filterText = "users"
+        let results = wrapper.filteredRequests
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results.first?.url, "/api/users")
     }
 }

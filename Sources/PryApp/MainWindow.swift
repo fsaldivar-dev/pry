@@ -3,6 +3,7 @@ import PryKit
 import PryLib
 
 @available(macOS 14, *)
+@MainActor
 struct MainWindow: View {
     @Environment(ProxyManager.self) private var proxy
     @Environment(RequestStoreWrapper.self) private var store

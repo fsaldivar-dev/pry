@@ -1,35 +1,33 @@
-import Testing
+import XCTest
 import PryLib
 @testable import PryKit
 
-@Suite("BreakpointUIManager")
-struct BreakpointUIManagerTests {
+@available(macOS 14, *)
+final class BreakpointUIManagerTests: XCTestCase {
 
-    @available(macOS 14, *)
-    @Test func addRemovePatterns() async {
-        // Clean state
+    @MainActor
+    func testAddRemovePatterns() {
         BreakpointStore.shared.clearAll()
 
-        let manager = await BreakpointUIManager()
-        await manager.add("*/api/*")
-        #expect(await manager.patterns.contains("*/api/*"))
+        let manager = BreakpointUIManager()
+        manager.add("*/api/*")
+        XCTAssertTrue(manager.patterns.contains("*/api/*"))
 
-        await manager.remove("*/api/*")
-        #expect(await manager.patterns.contains("*/api/*") == false)
+        manager.remove("*/api/*")
+        XCTAssertFalse(manager.patterns.contains("*/api/*"))
 
-        // Cleanup
         BreakpointStore.shared.clearAll()
     }
 
-    @available(macOS 14, *)
-    @Test func clearAllPatterns() async {
+    @MainActor
+    func testClearAllPatterns() {
         BreakpointStore.shared.clearAll()
 
-        let manager = await BreakpointUIManager()
-        await manager.add("*/a/*")
-        await manager.add("*/b/*")
-        await manager.clearAll()
-        #expect(await manager.patterns.isEmpty)
+        let manager = BreakpointUIManager()
+        manager.add("*/a/*")
+        manager.add("*/b/*")
+        manager.clearAll()
+        XCTAssertTrue(manager.patterns.isEmpty)
 
         BreakpointStore.shared.clearAll()
     }
