@@ -7,7 +7,14 @@ set -euo pipefail
 VERSION="${1:-1.0.0}"
 APP_NAME="Pry"
 BUILD_DIR="build/app"
+
+# Validate VERSION is a semver string (no injection via sed)
+if ! echo "${VERSION}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+    echo "ERROR: Invalid version '${VERSION}'. Must be semver (e.g. 1.0.0)"
+    exit 1
+fi
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+RESOURCES_DIR="Sources/PryApp/Resources"
 
 echo "==> Building PryApp v${VERSION}..."
 
@@ -32,47 +39,25 @@ if [ ! -f "${BIN_PATH}/pry" ]; then
     exit 1
 fi
 
-# Copy app binary
+# Copy binaries
 cp "${BIN_PATH}/PryApp" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
-
-# Also include CLI binary
 cp "${BIN_PATH}/pry" "${APP_BUNDLE}/Contents/MacOS/pry"
 
-# Create Info.plist
-cat > "${APP_BUNDLE}/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleName</key>
-    <string>${APP_NAME}</string>
-    <key>CFBundleDisplayName</key>
-    <string>${APP_NAME}</string>
-    <key>CFBundleIdentifier</key>
-    <string>dev.fsaldivar.pry</string>
-    <key>CFBundleVersion</key>
-    <string>${VERSION}</string>
-    <key>CFBundleShortVersionString</key>
-    <string>${VERSION}</string>
-    <key>CFBundleExecutable</key>
-    <string>${APP_NAME}</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>NSSupportsAutomaticTermination</key>
-    <true/>
-    <key>NSSupportsSuddenTermination</key>
-    <false/>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.developer-tools</string>
-</dict>
-</plist>
-PLIST
+# Generate Info.plist from template (replace Xcode variables with actual values)
+sed -e "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/dev.fsaldivar.pry/g" \
+    -e "s/\$(CURRENT_PROJECT_VERSION)/${VERSION}/g" \
+    -e "s/\$(MARKETING_VERSION)/${VERSION}/g" \
+    -e "s/\$(EXECUTABLE_NAME)/${APP_NAME}/g" \
+    -e "s/\$(MACOSX_DEPLOYMENT_TARGET)/14.0/g" \
+    "${RESOURCES_DIR}/Info.plist" > "${APP_BUNDLE}/Contents/Info.plist"
+
+# Copy asset catalog (if compiled assets exist, otherwise copy raw)
+if [ -d "${BIN_PATH}/PryApp_PryApp.bundle" ]; then
+    cp -R "${BIN_PATH}/PryApp_PryApp.bundle/"* "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
+fi
+
+# Copy entitlements (for reference, used during codesign)
+cp "${RESOURCES_DIR}/PryApp.entitlements" "${APP_BUNDLE}/Contents/Resources/"
 
 echo "==> App bundle created: ${APP_BUNDLE}"
 echo "    Binary: $(file "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}")"

@@ -1,0 +1,40 @@
+name: Pry
+options:
+  bundleIdPrefix: dev.fsaldivar
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  pry:
+    path: .
+
+targets:
+  PryApp:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/PryApp
+        excludes:
+          - "Resources/Info.plist"
+    resources:
+      - path: Sources/PryApp/Resources/Assets.xcassets
+    dependencies:
+      - package: pry
+        product: PryKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.fsaldivar.pry
+        PRODUCT_NAME: Pry
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        INFOPLIST_FILE: Sources/PryApp/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/PryApp/Resources/PryApp.entitlements
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        GENERATE_INFOPLIST_FILE: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: true

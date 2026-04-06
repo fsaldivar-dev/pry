@@ -43,7 +43,9 @@ targets += [
     .executableTarget(
         name: "PryApp",
         dependencies: ["PryKit"],
-        path: "Sources/PryApp"
+        path: "Sources/PryApp",
+        exclude: ["Resources/Info.plist", "Resources/PryApp.entitlements"],
+        resources: [.process("Resources/Assets.xcassets")]
     ),
     .testTarget(
         name: "PryKitTests",
