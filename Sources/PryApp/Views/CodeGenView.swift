@@ -58,7 +58,10 @@ struct CodeGenView: View {
     }
 
     private func regenerate() {
-        let isHTTPS = request.requestHeaders.contains { $0.0.lowercased() == "host" }
+        // Detect HTTPS by URL scheme, port 443, or CONNECT tunnel origin
+        let isHTTPS = request.url.lowercased().hasPrefix("https") ||
+                      request.host.hasSuffix(":443") ||
+                      request.isTunnel
         switch selectedLanguage {
         case .curl:
             generatedCode = CurlGenerator.generate(from: request, https: isHTTPS)

@@ -69,8 +69,11 @@ struct FilterBarView: View {
 
             Spacer()
 
-            // Active filters indicator
-            if hasActiveFilters {
+            // Active filters indicator — computed inline for @Bindable consistency
+            let hasActive = store.filterMethod != nil ||
+                            store.filterStatus != nil ||
+                            !store.filterText.isEmpty
+            if hasActive {
                 Button("Clear Filters") {
                     store.filterMethod = nil
                     store.filterStatus = nil
@@ -83,9 +86,5 @@ struct FilterBarView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(.bar)
-    }
-
-    private var hasActiveFilters: Bool {
-        store.filterMethod != nil || store.filterStatus != nil || !store.filterText.isEmpty
     }
 }
