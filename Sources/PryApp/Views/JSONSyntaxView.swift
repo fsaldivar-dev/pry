@@ -54,7 +54,7 @@ struct JSONSyntaxView: View {
     }
 
     // Compiled once, reused for every line — avoids O(n) regex compilations
-    private static let keyValueRegex: NSRegularExpression = {
+    private nonisolated(unsafe) static let keyValueRegex: NSRegularExpression = {
         try! NSRegularExpression(pattern: #"^(\s*)"([^"]+)"(\s*:\s*)(.*)"#)
     }()
 
