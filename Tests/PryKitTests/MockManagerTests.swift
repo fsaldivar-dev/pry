@@ -18,6 +18,20 @@ final class MockManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testRemoveDeletesSingleMock() {
+        let manager = MockManager()
+        Config.clearMocks()
+
+        manager.save(path: "/api/a", response: "1")
+        manager.save(path: "/api/b", response: "2")
+        manager.remove(path: "/api/a")
+        XCTAssertNil(manager.mocks["/api/a"])
+        XCTAssertEqual(manager.mocks["/api/b"], "2")
+
+        Config.clearMocks()
+    }
+
+    @MainActor
     func testClearRemovesAll() {
         let manager = MockManager()
         Config.clearMocks()

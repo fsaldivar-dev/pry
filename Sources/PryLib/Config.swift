@@ -93,6 +93,15 @@ public struct Config {
         return mocks
     }
 
+    public static func removeMock(path: String) {
+        var mocks = loadMocks()
+        mocks.removeValue(forKey: path)
+        clearMocks()
+        for (p, r) in mocks {
+            saveMock(path: p, response: r)
+        }
+    }
+
     public static func clearMocks() {
         try? "".write(toFile: mockFile, atomically: true, encoding: .utf8)
     }
