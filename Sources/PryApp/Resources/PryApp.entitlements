@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        App Sandbox DISABLED — required for HTTP proxy functionality:
+        - ProxyServer binds to localhost ports (8080+) via SwiftNIO
+        - CertificateAuthority reads/writes ~/.pry/ca/ for TLS interception
+        - Config files (.prywatch, .pryconfig, .pryrules) in user's CWD
+        - Future: networksetup for system proxy auto-enable (#25)
+        Same pattern as Charles Proxy, Proxyman, mitmproxy.
+    -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <key>com.apple.security.network.server</key>
+    <true/>
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+</dict>
+</plist>
