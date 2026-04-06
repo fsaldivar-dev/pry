@@ -8,6 +8,7 @@ struct MainWindow: View {
     @Environment(ProxyManager.self) private var proxy
     @Environment(RequestStoreWrapper.self) private var store
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showMocks = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,8 +16,11 @@ struct MainWindow: View {
                 SourceListView()
                     .navigationSplitViewColumnWidth(min: 180, ideal: 220)
             } content: {
-                RequestListView()
-                    .navigationSplitViewColumnWidth(min: 300, ideal: 450)
+                VStack(spacing: 0) {
+                    FilterBarView()
+                    RequestListView()
+                }
+                .navigationSplitViewColumnWidth(min: 300, ideal: 450)
             } detail: {
                 RequestDetailView()
             }
@@ -30,6 +34,18 @@ struct MainWindow: View {
                         Text(proxy.isRunning ? "Stop" : "Start")
                     }
                 }
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        showMocks.toggle()
+                    } label: {
+                        Image(systemName: "theatermask.and.paintbrush")
+                        Text("Mocks")
+                    }
+                }
+            }
+            .sheet(isPresented: $showMocks) {
+                MockListView()
+                    .frame(minWidth: 500, minHeight: 400)
             }
 
             StatusBarView()

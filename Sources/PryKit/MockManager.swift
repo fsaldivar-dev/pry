@@ -22,6 +22,11 @@ public final class MockManager {
         mocks = Config.loadMocks()
     }
 
+    public func remove(path: String) {
+        Config.removeMock(path: path)
+        reload()
+    }
+
     public func clearAll() {
         Config.clearMocks()
         mocks = [:]

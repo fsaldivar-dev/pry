@@ -93,6 +93,16 @@ public struct Config {
         return mocks
     }
 
+    public static func removeMock(path: String) {
+        var mocks = loadMocks()
+        mocks.removeValue(forKey: path)
+        // Rewrite entire file atomically — no window where concurrent readers
+        // see partial data (atomically: true writes to tmp then renames)
+        let content = mocks.map { "\($0.key)\t\($0.value)" }.joined(separator: "\n")
+        try? (content.isEmpty ? "" : content + "\n")
+            .write(toFile: mockFile, atomically: true, encoding: .utf8)
+    }
+
     public static func clearMocks() {
         try? "".write(toFile: mockFile, atomically: true, encoding: .utf8)
     }

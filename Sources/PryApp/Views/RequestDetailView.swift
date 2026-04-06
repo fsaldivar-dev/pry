@@ -19,6 +19,8 @@ struct RequestDetailView: View {
                     .tabItem { Label("Cookies", systemImage: "birthday.cake") }
                 RawTabView(request: request)
                     .tabItem { Label("Raw", systemImage: "chevron.left.forwardslash.chevron.right") }
+                CodeGenView(request: request)
+                    .tabItem { Label("Code", systemImage: "curlybraces") }
             }
             .padding(8)
         } else {
