@@ -45,7 +45,7 @@ private struct BodySection: View {
 
             if content != nil, !formattedText.isEmpty {
                 if isJSON {
-                    JSONSyntaxView(json: formattedText)
+                    JSONSyntaxView(json: formattedText, alreadyFormatted: true)
                         .frame(maxHeight: 400)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                 } else {

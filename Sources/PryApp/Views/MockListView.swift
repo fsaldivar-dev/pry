@@ -75,6 +75,8 @@ private struct MockRow: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
 
+    @State private var showDeleteConfirmation = false
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -91,11 +93,20 @@ private struct MockRow: View {
                 Image(systemName: "pencil")
             }
             .buttonStyle(.borderless)
-            Button(action: onDelete) {
+            Button {
+                showDeleteConfirmation = true
+            } label: {
                 Image(systemName: "trash")
                     .foregroundStyle(.red)
             }
             .buttonStyle(.borderless)
+            .confirmationDialog(
+                "Delete mock for \(path)?",
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive, action: onDelete)
+            }
         }
     }
 }

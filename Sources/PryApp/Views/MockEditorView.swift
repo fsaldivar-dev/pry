@@ -12,6 +12,7 @@ struct MockEditorView: View {
     @State private var urlPattern: String = ""
     @State private var responseBody: String = "{}"
     @State private var jsonError: String?
+    @State private var validationTask: Task<Void, Never>?
 
     var isEditing: Bool { existingPath != nil }
 
@@ -43,7 +44,13 @@ struct MockEditorView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .frame(minHeight: 200)
                         .onChange(of: responseBody) {
-                            validateJSON()
+                            // Debounce: wait 300ms after last keystroke before validating
+                            validationTask?.cancel()
+                            validationTask = Task {
+                                try? await Task.sleep(for: .milliseconds(300))
+                                guard !Task.isCancelled else { return }
+                                validateJSON()
+                            }
                         }
 
                     if let jsonError {

@@ -3,6 +3,8 @@ import SwiftUI
 @available(macOS 14, *)
 struct JSONSyntaxView: View {
     let json: String
+    /// Skip pretty-print if the caller already formatted the JSON.
+    var alreadyFormatted: Bool = false
 
     @State private var highlighted: AttributedString = AttributedString("")
 
@@ -15,21 +17,28 @@ struct JSONSyntaxView: View {
                 .padding()
         }
         .task(id: json) {
+            let skip = alreadyFormatted
             highlighted = await Task.detached {
-                Self.colorize(json)
+                Self.colorize(json, skipPrettyPrint: skip)
             }.value
         }
     }
 
-    /// Pretty-prints and colorizes JSON using regex-based token matching.
-    nonisolated private static func colorize(_ raw: String) -> AttributedString {
-        // Pretty-print first
-        guard let data = raw.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data),
-              let pretty = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
-              let prettyStr = String(data: pretty, encoding: .utf8)
-        else {
-            return AttributedString(raw)
+    /// Colorizes JSON using regex-based token matching.
+    /// If `skipPrettyPrint` is true, skips the JSONSerialization round-trip.
+    nonisolated private static func colorize(_ raw: String, skipPrettyPrint: Bool = false) -> AttributedString {
+        let prettyStr: String
+        if skipPrettyPrint {
+            prettyStr = raw
+        } else {
+            guard let data = raw.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: data),
+                  let pretty = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                  let str = String(data: pretty, encoding: .utf8)
+            else {
+                return AttributedString(raw)
+            }
+            prettyStr = str
         }
 
         var result = AttributedString()
@@ -44,12 +53,15 @@ struct JSONSyntaxView: View {
         return result
     }
 
+    // Compiled once, reused for every line — avoids O(n) regex compilations
+    private static let keyValueRegex: NSRegularExpression = {
+        try! NSRegularExpression(pattern: #"^(\s*)"([^"]+)"(\s*:\s*)(.*)"#)
+    }()
+
     nonisolated private static func colorizeLine(_ line: String) -> AttributedString {
         var result = AttributedString()
 
-        // Match: "key" : value patterns
-        let keyValuePattern = #"^(\s*)"([^"]+)"(\s*:\s*)(.*)"#
-        if let match = try? NSRegularExpression(pattern: keyValuePattern).firstMatch(
+        if let match = keyValueRegex.firstMatch(
             in: line, range: NSRange(line.startIndex..., in: line)
         ) {
             // Indent
