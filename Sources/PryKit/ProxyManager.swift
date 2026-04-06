@@ -11,6 +11,7 @@ public final class ProxyManager {
     public var port: Int
     public var requestCount: Int = 0
     public var domains: [String] = []
+    public var systemProxyEnabled = false
 
     private let serverBox = ServerBox()
 
@@ -24,11 +25,27 @@ public final class ProxyManager {
         serverBox.server = s
         isRunning = true
         reloadDomains()
+        // Auto-enable system proxy so traffic flows through Pry
+        enableSystemProxy()
     }
 
     public func stop() {
+        // Restore system proxy before shutting down
+        disableSystemProxy()
         serverBox.shutdownIfNeeded()
         isRunning = false
+    }
+
+    public func enableSystemProxy() {
+        SystemProxy.enable(port: port)
+        systemProxyEnabled = true
+    }
+
+    public func disableSystemProxy() {
+        if systemProxyEnabled {
+            SystemProxy.disable()
+            systemProxyEnabled = false
+        }
     }
 
     public func reloadDomains() {
@@ -46,6 +63,8 @@ public final class ProxyManager {
     }
 
     deinit {
+        // Ensure system proxy is restored even on unexpected termination
+        SystemProxy.disable()
         serverBox.shutdownIfNeeded()
     }
 }
