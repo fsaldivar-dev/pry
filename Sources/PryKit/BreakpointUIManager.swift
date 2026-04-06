@@ -13,6 +13,9 @@ public final class BreakpointUIManager {
     public init() {
         patterns = BreakpointStore.shared.all()
 
+        // LIMITATION: Overwrites onPause on the shared manager.
+        // If the CLI TUI and PryApp run simultaneously, the TUI will lose
+        // pause notifications. Migrate to publisher/subscriber in a future phase.
         RequestBreakpointManager.shared.onPause = { [weak self] in
             guard let self else { return }
             let paused = RequestBreakpointManager.shared.getPaused()

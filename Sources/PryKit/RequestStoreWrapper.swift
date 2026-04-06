@@ -11,23 +11,55 @@ public enum SourceFilter: Hashable, Sendable {
 }
 
 /// @Observable bridge over RequestStore for SwiftUI.
+///
+/// Debounces updates from PryLib's RequestStore into the MainActor,
+/// and caches the filtered result to avoid redundant iteration.
 @available(macOS 14, *)
 @Observable
 @MainActor
 public final class RequestStoreWrapper {
-    public var requests: [RequestStore.CapturedRequest] = []
+    // MARK: - Published state
+
+    public var requests: [RequestStore.CapturedRequest] = [] {
+        didSet { invalidateFilterCache() }
+    }
     public var selectedRequest: RequestStore.CapturedRequest?
-    public var selectedSource: SourceFilter?
-    public var filterText: String = ""
-    public var filterMethod: String?
-    public var filterStatus: ClosedRange<UInt>?
+    public var selectedSource: SourceFilter? {
+        didSet { invalidateFilterCache() }
+    }
+    public var filterText: String = "" {
+        didSet { invalidateFilterCache() }
+    }
+    public var filterMethod: String? {
+        didSet { invalidateFilterCache() }
+    }
+    public var filterStatus: ClosedRange<UInt>? {
+        didSet { invalidateFilterCache() }
+    }
+
+    // MARK: - Filtered results (cached)
+
+    /// Cached filtered requests. Recomputed only when inputs change.
+    public var filteredRequests: [RequestStore.CapturedRequest] {
+        if let cached = _cachedFiltered { return cached }
+        let result = computeFiltered()
+        _cachedFiltered = result
+        return result
+    }
+
+    // MARK: - Private
 
     private let store: RequestStore
+    private var updateTask: Task<Void, Never>?
+    private var _cachedFiltered: [RequestStore.CapturedRequest]?
 
-    public var filteredRequests: [RequestStore.CapturedRequest] {
+    private func invalidateFilterCache() {
+        _cachedFiltered = nil
+    }
+
+    private func computeFiltered() -> [RequestStore.CapturedRequest] {
         var result = requests
 
-        // Source filter from sidebar
         if let source = selectedSource {
             switch source {
             case .all:
@@ -58,6 +90,8 @@ public final class RequestStoreWrapper {
         return result
     }
 
+    // MARK: - Init
+
     public init(store: RequestStore = .shared) {
         self.store = store
         self.requests = store.getAll()
@@ -65,7 +99,10 @@ public final class RequestStoreWrapper {
         store.onChange = { [weak self] in
             guard let self else { return }
             let all = store.getAll()
-            Task { @MainActor in
+            // Cancel pending task to debounce rapid-fire updates
+            self.updateTask?.cancel()
+            self.updateTask = Task { @MainActor in
+                guard !Task.isCancelled else { return }
                 self.requests = all
             }
         }

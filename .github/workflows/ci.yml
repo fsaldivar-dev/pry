@@ -142,11 +142,13 @@ jobs:
           key: spm-linux-${{ hashFiles('Package.resolved') }}
           restore-keys: spm-linux-
 
-      - name: Build
-        run: swift build
+      - name: Build (CLI + PryLib — no SwiftUI/AppKit on Linux)
+        run: |
+          swift build --target Pry
+          swift build --target PryLib
 
       - name: Test
-        run: swift test
+        run: swift test --filter PryLibTests
 
-      - name: Build Release
-        run: swift build -c release
+      - name: Build Release (CLI only)
+        run: swift build -c release --target Pry
