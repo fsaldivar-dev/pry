@@ -50,10 +50,14 @@ struct RequestListView: NSViewRepresentable {
         // Context menu
         tableView.menu = context.coordinator.makeContextMenu()
 
-        // Custom dark background matching TUI palette
-        tableView.backgroundColor = PryTheme.nsBgMain
-        scrollView.backgroundColor = PryTheme.nsBgMain
-        scrollView.drawsBackground = true
+        // Transparent background for glass container effect
+        tableView.backgroundColor = .clear
+        scrollView.backgroundColor = .clear
+        scrollView.drawsBackground = false
+        // Round corners for glass container clipping
+        scrollView.wantsLayer = true
+        scrollView.layer?.cornerRadius = 16
+        scrollView.layer?.masksToBounds = true
 
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
@@ -132,12 +136,25 @@ struct RequestListView: NSViewRepresentable {
                 cell.alignment = .center
             case "method":
                 cell.stringValue = req.method
-                cell.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
-                cell.textColor = PryTheme.nsTextPrimary
+                cell.font = .monospacedSystemFont(ofSize: 10, weight: .bold)
+                cell.alignment = .center
+                cell.wantsLayer = true
+                cell.layer?.cornerRadius = 4
+                cell.layer?.masksToBounds = true
+                // Color based on method
+                let (textColor, bgColor) = Self.methodColors(req.method)
+                cell.textColor = textColor
+                cell.layer?.backgroundColor = bgColor.cgColor
             case "status":
                 cell.stringValue = req.statusCode.map { "\($0)" } ?? "..."
-                cell.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-                cell.textColor = PryTheme.statusColor(req.statusCode)
+                cell.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
+                cell.alignment = .center
+                cell.wantsLayer = true
+                cell.layer?.cornerRadius = 4
+                cell.layer?.masksToBounds = true
+                let statusNSColor = PryTheme.statusColor(req.statusCode)
+                cell.textColor = statusNSColor
+                cell.layer?.backgroundColor = statusNSColor.withAlphaComponent(0.12).cgColor
             case "host":
                 cell.stringValue = req.host
                 cell.font = .systemFont(ofSize: 11)
@@ -268,6 +285,22 @@ struct RequestListView: NSViewRepresentable {
             guard let req = sender.representedObject as? RequestStore.CapturedRequest else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(req.host, forType: .string)
+        }
+
+        // MARK: - Badge colors
+
+        static func methodColors(_ method: String) -> (NSColor, NSColor) {
+            switch method.uppercased() {
+            case "GET":     return (PryTheme.nsSuccess, PryTheme.nsSuccess.withAlphaComponent(0.15))
+            case "POST":    return (PryTheme.nsWarning, PryTheme.nsWarning.withAlphaComponent(0.15))
+            case "PUT":     return (NSColor(red: 1.0, green: 0.6, blue: 0.0, alpha: 1),
+                                   NSColor(red: 1.0, green: 0.6, blue: 0.0, alpha: 0.15))
+            case "DELETE":  return (PryTheme.nsError, PryTheme.nsError.withAlphaComponent(0.15))
+            case "PATCH":   return (NSColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1),
+                                   NSColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 0.15))
+            case "CONNECT": return (PryTheme.nsTextTertiary, PryTheme.nsTextTertiary.withAlphaComponent(0.10))
+            default:        return (PryTheme.nsTextSecondary, NSColor.clear)
+            }
         }
 
         private static let timeFormatter: DateFormatter = {
