@@ -57,10 +57,10 @@ struct RequestListView: NSViewRepresentable {
         // Context menu
         tableView.menu = context.coordinator.makeContextMenu()
 
-        // Transparent background for glass container effect
-        tableView.backgroundColor = .clear
-        scrollView.backgroundColor = .clear
-        scrollView.drawsBackground = false
+        // Uniform dark background
+        tableView.backgroundColor = PryTheme.nsBgMain
+        scrollView.backgroundColor = PryTheme.nsBgMain
+        scrollView.drawsBackground = true
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         context.coordinator.tableView = tableView
