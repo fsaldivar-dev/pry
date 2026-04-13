@@ -28,7 +28,7 @@ struct QueryTabView: View {
                             GridRow {
                                 Text(item.name)
                                     .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(Color.accentColor)
+                                    .foregroundStyle(PryTheme.accent)
                                     .textSelection(.enabled)
                                 Text(item.value)
                                     .font(.system(size: 11, design: .monospaced))

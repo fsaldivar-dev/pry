@@ -60,7 +60,7 @@ private struct CookieSection: View {
                         GridRow {
                             Text(cookie.name)
                                 .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(PryTheme.accent)
                                 .textSelection(.enabled)
                             Text(cookie.value)
                                 .font(.system(size: 11, design: .monospaced))

@@ -11,7 +11,7 @@ struct StatusBarView: View {
         HStack(spacing: 16) {
             HStack(spacing: 4) {
                 Circle()
-                    .fill(proxy.isRunning ? .green : .red)
+                    .fill(proxy.isRunning ? PryTheme.success : PryTheme.error)
                     .frame(width: 8, height: 8)
                 Text(proxy.isRunning ? "Running" : "Stopped")
                     .font(.caption)
@@ -41,6 +41,6 @@ struct StatusBarView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
-        .pryBarBackground()
+        .background(PryTheme.bgStatusBar)
     }
 }

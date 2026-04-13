@@ -27,15 +27,15 @@ struct MainWindow: View {
                         ? "antenna.radiowaves.left.and.right"
                         : "antenna.radiowaves.left.and.right.slash")
                         .font(.system(size: 48))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(PryTheme.accent.opacity(0.6))
                     Text(proxy.isRunning ? "Waiting for traffic…" : "Proxy Stopped")
                         .font(.title2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PryTheme.textSecondary)
                     Text(proxy.isRunning
                         ? "Send requests through port \(String(proxy.port))"
                         : "Press **Start** to begin capturing")
                         .font(.callout)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(PryTheme.textTertiary)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -61,6 +61,7 @@ struct MainWindow: View {
 
             StatusBarView()
         }
+        .background(PryTheme.bgMain)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
