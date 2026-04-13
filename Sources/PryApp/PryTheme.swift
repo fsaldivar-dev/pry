@@ -36,9 +36,9 @@ enum PryTheme {
 
     // MARK: - Semantic Status
 
-    static let success = Color(red: 63/255, green: 185/255, blue: 80/255)          // #3FB950
-    static let error   = Color(red: 248/255, green: 81/255, blue: 73/255)          // #F85149
-    static let warning = Color(red: 210/255, green: 153/255, blue: 34/255)         // #D29922
+    static let success = Color(red: 16/255, green: 185/255, blue: 129/255)          // #10B981 emerald
+    static let error   = Color(red: 239/255, green: 68/255, blue: 68/255)          // #EF4444 modern red
+    static let warning = Color(red: 245/255, green: 158/255, blue: 11/255)         // #F59E0B amber
 
     // MARK: - JSON Syntax
 
@@ -58,9 +58,9 @@ enum PryTheme {
     static let nsTextSecondary = NSColor(red: 125/255, green: 133/255, blue: 144/255, alpha: 1)
     static let nsTextTertiary  = NSColor(red: 110/255, green: 118/255, blue: 129/255, alpha: 1)
     static let nsAccent        = NSColor(red: 0/255, green: 229/255, blue: 255/255, alpha: 1)
-    static let nsSuccess       = NSColor(red: 63/255, green: 185/255, blue: 80/255, alpha: 1)
-    static let nsError         = NSColor(red: 248/255, green: 81/255, blue: 73/255, alpha: 1)
-    static let nsWarning       = NSColor(red: 210/255, green: 153/255, blue: 34/255, alpha: 1)
+    static let nsSuccess       = NSColor(red: 16/255, green: 185/255, blue: 129/255, alpha: 1)  // #10B981
+    static let nsError         = NSColor(red: 239/255, green: 68/255, blue: 68/255, alpha: 1)   // #EF4444
+    static let nsWarning       = NSColor(red: 245/255, green: 158/255, blue: 11/255, alpha: 1)  // #F59E0B
     static let nsHover         = NSColor(white: 1, alpha: 0.04)
 
     /// Status code color for NSTableView cells.

@@ -20,19 +20,22 @@ struct RequestListView: NSViewRepresentable {
         // (id, title, width, resizes?)
         let columns: [(String, String, CGFloat, Bool)] = [
             ("icon",     "",         28,  false),
-            ("method",   "Method",   52,  false),
-            ("status",   "Status",   48,  false),
-            ("host",     "Host",     140, false),
+            ("method",   "Method",   68,  false),
+            ("status",   "Status",   56,  false),
+            ("host",     "Host",     150, false),
             ("path",     "Path",     200, true),   // stretches to fill
             ("duration", "Duration", 64,  false),
             ("time",     "Time",     60,  false),
         ]
         for (id, title, width, resizes) in columns {
             let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
-            col.title = title
+            col.title = title.uppercased()
             col.width = width
             col.minWidth = id == "icon" ? 28 : 36
             col.resizingMask = resizes ? .autoresizingMask : .userResizingMask
+            // Style column headers
+            col.headerCell.font = .systemFont(ofSize: 9, weight: .semibold)
+            col.headerCell.textColor = PryTheme.nsTextTertiary
             tableView.addTableColumn(col)
         }
         // Path stretches; fixed columns don't shrink below their width
@@ -42,8 +45,12 @@ struct RequestListView: NSViewRepresentable {
         tableView.delegate = context.coordinator
         tableView.dataSource = context.coordinator
         tableView.usesAlternatingRowBackgroundColors = false
+        tableView.gridColor = NSColor.white.withAlphaComponent(0.06)
+        tableView.gridStyleMask = .solidHorizontalGridLineMask
         tableView.allowsMultipleSelection = false
+        tableView.rowHeight = 32  // More breathing room between rows
         tableView.style = .inset
+        tableView.intercellSpacing = NSSize(width: 6, height: 6)
         tableView.target = context.coordinator
         tableView.action = #selector(Coordinator.tableViewClicked(_:))
 
@@ -119,58 +126,169 @@ struct RequestListView: NSViewRepresentable {
             guard row < requests.count, let colId = tableColumn?.identifier.rawValue else { return nil }
             let req = requests[row]
 
-            let cellId = NSUserInterfaceItemIdentifier(colId)
-            let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? NSTextField
-                ?? NSTextField(labelWithString: "")
-            cell.identifier = cellId
-            cell.lineBreakMode = .byTruncatingTail
+            // Icon column: colored status dot
+            if colId == "icon" {
+                return Self.makeStatusDot(for: req, tableView: tableView)
+            }
 
+            // Method column: custom cell with badge
+            if colId == "method" {
+                return Self.makeMethodBadge(method: req.method, tableView: tableView)
+            }
+
+            // All other columns: vertically-centered NSTextField inside NSTableCellView
+            let cellId = NSUserInterfaceItemIdentifier(colId)
+            let cellView: NSTableCellView
+            if let reused = tableView.makeView(withIdentifier: cellId, owner: nil) as? NSTableCellView,
+               let tf = reused.textField {
+                cellView = reused
+                configure(textField: tf, colId: colId, req: req)
+            } else {
+                cellView = NSTableCellView()
+                cellView.identifier = cellId
+                let tf = NSTextField(labelWithString: "")
+                tf.translatesAutoresizingMaskIntoConstraints = false
+                tf.lineBreakMode = .byTruncatingTail
+                tf.cell?.isScrollable = false
+                tf.cell?.truncatesLastVisibleLine = true
+                cellView.addSubview(tf)
+                cellView.textField = tf
+                // Center vertically, pin horizontally
+                NSLayoutConstraint.activate([
+                    tf.leadingAnchor.constraint(equalTo: cellView.leadingAnchor, constant: 2),
+                    tf.trailingAnchor.constraint(equalTo: cellView.trailingAnchor, constant: -2),
+                    tf.centerYAnchor.constraint(equalTo: cellView.centerYAnchor),
+                ])
+                configure(textField: tf, colId: colId, req: req)
+            }
+            return cellView
+        }
+
+        private func configure(textField tf: NSTextField, colId: String, req: RequestStore.CapturedRequest) {
             switch colId {
-            case "icon":
-                cell.stringValue = RequestIconHelper.icon(for: req)
-                cell.alignment = .center
-            case "method":
-                cell.stringValue = req.method
-                cell.font = .monospacedSystemFont(ofSize: 10, weight: .bold)
-                cell.alignment = .center
-                cell.wantsLayer = true
-                cell.layer?.cornerRadius = 4
-                cell.layer?.masksToBounds = true
-                // Color based on method
-                let (textColor, bgColor) = Self.methodColors(req.method)
-                cell.textColor = textColor
-                cell.layer?.backgroundColor = bgColor.cgColor
             case "status":
-                cell.stringValue = req.statusCode.map { "\($0)" } ?? "..."
-                cell.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
-                cell.alignment = .center
-                cell.wantsLayer = true
-                cell.layer?.cornerRadius = 4
-                cell.layer?.masksToBounds = true
-                let statusNSColor = PryTheme.statusColor(req.statusCode)
-                cell.textColor = statusNSColor
-                cell.layer?.backgroundColor = statusNSColor.withAlphaComponent(0.12).cgColor
+                tf.stringValue = req.statusCode.map { "\($0)" } ?? "..."
+                tf.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+                tf.alignment = .center
+                tf.textColor = PryTheme.statusColor(req.statusCode)
             case "host":
-                cell.stringValue = req.host
-                cell.font = .systemFont(ofSize: 11)
-                cell.textColor = PryTheme.nsTextPrimary
+                tf.stringValue = req.host
+                tf.font = .systemFont(ofSize: 11)
+                tf.textColor = PryTheme.nsTextPrimary
             case "path":
-                cell.stringValue = req.url
-                cell.font = .systemFont(ofSize: 11)
-                cell.textColor = PryTheme.nsTextPrimary
+                // Show relative path instead of full URL
+                if let url = URL(string: req.url) {
+                    let path = url.path.isEmpty ? "/" : url.path
+                    let query = url.query.map { "?\($0)" } ?? ""
+                    tf.stringValue = path + query
+                } else {
+                    tf.stringValue = req.url
+                }
+                tf.font = .systemFont(ofSize: 11)
+                tf.textColor = PryTheme.nsTextPrimary
             case "time":
-                cell.stringValue = Self.formatTime(req.timestamp)
-                cell.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-                cell.textColor = PryTheme.nsTextSecondary
+                tf.stringValue = Self.formatTime(req.timestamp)
+                tf.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+                tf.textColor = PryTheme.nsTextSecondary
             case "duration":
-                cell.stringValue = Self.formatDuration(req.duration)
-                cell.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-                cell.textColor = req.duration == nil ? PryTheme.nsTextTertiary : PryTheme.nsTextSecondary
-                cell.alignment = .right
+                tf.stringValue = Self.formatDuration(req.duration)
+                tf.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+                tf.textColor = req.duration == nil ? PryTheme.nsTextTertiary : PryTheme.nsTextSecondary
+                tf.alignment = .right
             default:
                 break
             }
-            return cell
+        }
+
+        /// Creates a method badge: NSTableCellView -> badgeView -> label, always centered.
+        private static func makeMethodBadge(method: String, tableView: NSTableView) -> NSView {
+            let cellId = NSUserInterfaceItemIdentifier("methodBadge")
+            if let reused = tableView.makeView(withIdentifier: cellId, owner: nil) as? NSTableCellView {
+                // Update existing badge
+                if let badge = reused.subviews.first,
+                   let label = badge.subviews.first as? NSTextField {
+                    label.stringValue = method
+                    let (textColor, bgColor) = methodColors(method)
+                    label.textColor = textColor
+                    badge.layer?.backgroundColor = bgColor.cgColor
+                }
+                return reused
+            }
+
+            // Build new badge cell
+            let cellView = NSTableCellView()
+            cellView.identifier = cellId
+
+            // Badge background view
+            let badge = NSView()
+            badge.wantsLayer = true
+            badge.layer?.cornerRadius = 4
+            badge.layer?.masksToBounds = true
+            badge.translatesAutoresizingMaskIntoConstraints = false
+
+            // Label inside badge
+            let label = NSTextField(labelWithString: method)
+            label.font = .systemFont(ofSize: 9, weight: .bold)
+            label.alignment = .center
+            label.translatesAutoresizingMaskIntoConstraints = false
+
+            let (textColor, bgColor) = methodColors(method)
+            label.textColor = textColor
+            badge.layer?.backgroundColor = bgColor.cgColor
+
+            badge.addSubview(label)
+            cellView.addSubview(badge)
+
+            // Badge centered in cell, label pinned inside badge with padding
+            NSLayoutConstraint.activate([
+                badge.centerYAnchor.constraint(equalTo: cellView.centerYAnchor),
+                badge.centerXAnchor.constraint(equalTo: cellView.centerXAnchor),
+                badge.heightAnchor.constraint(equalToConstant: 20),
+                label.leadingAnchor.constraint(equalTo: badge.leadingAnchor, constant: 6),
+                label.trailingAnchor.constraint(equalTo: badge.trailingAnchor, constant: -6),
+                label.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
+            ])
+
+            return cellView
+        }
+
+        /// Creates a colored dot indicating request status.
+        private static func makeStatusDot(for req: RequestStore.CapturedRequest, tableView: NSTableView) -> NSView {
+            let cellId = NSUserInterfaceItemIdentifier("statusDot")
+            let cellView: NSTableCellView
+            if let reused = tableView.makeView(withIdentifier: cellId, owner: nil) as? NSTableCellView,
+               let dot = reused.subviews.first {
+                cellView = reused
+                dot.layer?.backgroundColor = statusDotColor(for: req).cgColor
+            } else {
+                cellView = NSTableCellView()
+                cellView.identifier = cellId
+                let dot = NSView()
+                dot.wantsLayer = true
+                dot.layer?.cornerRadius = 5
+                dot.translatesAutoresizingMaskIntoConstraints = false
+                cellView.addSubview(dot)
+                NSLayoutConstraint.activate([
+                    dot.widthAnchor.constraint(equalToConstant: 10),
+                    dot.heightAnchor.constraint(equalToConstant: 10),
+                    dot.centerXAnchor.constraint(equalTo: cellView.centerXAnchor),
+                    dot.centerYAnchor.constraint(equalTo: cellView.centerYAnchor),
+                ])
+                dot.layer?.backgroundColor = statusDotColor(for: req).cgColor
+            }
+            return cellView
+        }
+
+        private static func statusDotColor(for req: RequestStore.CapturedRequest) -> NSColor {
+            if req.isTunnel { return PryTheme.nsTextTertiary }
+            if req.isMock { return NSColor(red: 168/255, green: 85/255, blue: 247/255, alpha: 1) } // purple
+            guard let status = req.statusCode else { return PryTheme.nsTextTertiary.withAlphaComponent(0.5) }
+            switch status {
+            case 200..<300: return PryTheme.nsSuccess
+            case 300..<400: return PryTheme.nsWarning
+            case 400..<600: return PryTheme.nsError
+            default: return PryTheme.nsTextTertiary
+            }
         }
 
         @objc func tableViewClicked(_ sender: NSTableView) {
@@ -286,13 +404,16 @@ struct RequestListView: NSViewRepresentable {
 
         static func methodColors(_ method: String) -> (NSColor, NSColor) {
             switch method.uppercased() {
-            case "GET":     return (PryTheme.nsSuccess, PryTheme.nsSuccess.withAlphaComponent(0.15))
-            case "POST":    return (PryTheme.nsWarning, PryTheme.nsWarning.withAlphaComponent(0.15))
-            case "PUT":     return (NSColor(red: 1.0, green: 0.6, blue: 0.0, alpha: 1),
-                                   NSColor(red: 1.0, green: 0.6, blue: 0.0, alpha: 0.15))
-            case "DELETE":  return (PryTheme.nsError, PryTheme.nsError.withAlphaComponent(0.15))
-            case "PATCH":   return (NSColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1),
-                                   NSColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 0.15))
+            case "GET":     return (NSColor(red: 16/255, green: 185/255, blue: 129/255, alpha: 1),     // emerald
+                                   NSColor(red: 16/255, green: 185/255, blue: 129/255, alpha: 0.18))
+            case "POST":    return (NSColor(red: 245/255, green: 158/255, blue: 11/255, alpha: 1),     // amber
+                                   NSColor(red: 245/255, green: 158/255, blue: 11/255, alpha: 0.18))
+            case "PUT":     return (NSColor(red: 251/255, green: 146/255, blue: 60/255, alpha: 1),     // orange
+                                   NSColor(red: 251/255, green: 146/255, blue: 60/255, alpha: 0.18))
+            case "DELETE":  return (NSColor(red: 239/255, green: 68/255, blue: 68/255, alpha: 1),      // red
+                                   NSColor(red: 239/255, green: 68/255, blue: 68/255, alpha: 0.18))
+            case "PATCH":   return (NSColor(red: 168/255, green: 85/255, blue: 247/255, alpha: 1),     // violet
+                                   NSColor(red: 168/255, green: 85/255, blue: 247/255, alpha: 0.18))
             case "CONNECT": return (PryTheme.nsTextTertiary, PryTheme.nsTextTertiary.withAlphaComponent(0.10))
             default:        return (PryTheme.nsTextSecondary, NSColor.clear)
             }

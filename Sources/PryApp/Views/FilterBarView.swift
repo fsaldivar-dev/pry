@@ -5,7 +5,6 @@ import PryKit
 @MainActor
 struct FilterBarView: View {
     @Environment(RequestStoreWrapper.self) private var store
-    @FocusState private var searchFocused: Bool
 
     private let methods = ["GET", "POST", "PUT", "PATCH", "DELETE"]
     private let statusRanges: [(label: String, range: ClosedRange<UInt>)] = [
@@ -18,8 +17,14 @@ struct FilterBarView: View {
     var body: some View {
         @Bindable var store = store
 
-        HStack(spacing: 4) {
-            // Method picker — compact menu instead of 5 chips
+        HStack(spacing: 8) {
+            // Search field first — prominent, takes most space
+            SearchFieldView(text: $store.filterText, placeholder: "Filter path, host or body...")
+                .frame(maxHeight: 24)
+
+            Spacer()
+
+            // Method filter — icon style
             Menu {
                 Button("All Methods") { store.filterMethod = nil }
                 Divider()
@@ -36,20 +41,25 @@ struct FilterBarView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 3) {
+                HStack(spacing: 4) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 10))
                     Text(store.filterMethod ?? "Method")
                         .font(.system(size: 11, weight: store.filterMethod != nil ? .semibold : .regular))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8))
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(store.filterMethod != nil ? Color.accentColor.opacity(0.15) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .foregroundStyle(store.filterMethod != nil ? PryTheme.accent : PryTheme.textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(store.filterMethod != nil ? PryTheme.accent.opacity(0.12) : Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
             }
             .buttonStyle(.borderless)
 
-            // Status picker — compact menu instead of 4 chips
+            // Status filter — icon style
             Menu {
                 Button("All Status") { store.filterStatus = nil }
                 Divider()
@@ -67,26 +77,25 @@ struct FilterBarView: View {
                 }
             } label: {
                 let activeLabel = statusRanges.first(where: { $0.range == store.filterStatus })?.label
-                HStack(spacing: 3) {
+                HStack(spacing: 4) {
+                    Image(systemName: "circle.grid.2x1")
+                        .font(.system(size: 10))
                     Text(activeLabel ?? "Status")
                         .font(.system(size: 11, weight: activeLabel != nil ? .semibold : .regular))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8))
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(store.filterStatus != nil ? Color.accentColor.opacity(0.15) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .foregroundStyle(store.filterStatus != nil ? PryTheme.accent : PryTheme.textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(store.filterStatus != nil ? PryTheme.accent.opacity(0.12) : Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
             }
             .buttonStyle(.borderless)
 
-            Divider().frame(height: 14)
-
-            // Search field — native NSSearchField so it gets focus alongside NSTableView
-            SearchFieldView(text: $store.filterText)
-                .frame(minWidth: 120, maxHeight: 22)
-
-            // Clear all filters
+            // Clear all
             let hasActive = store.filterMethod != nil ||
                             store.filterStatus != nil ||
                             !store.filterText.isEmpty
@@ -96,22 +105,16 @@ struct FilterBarView: View {
                     store.filterStatus = nil
                     store.filterText = ""
                 } label: {
-                    Image(systemName: "xmark.circle")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(PryTheme.textTertiary)
                 }
                 .buttonStyle(.borderless)
                 .help("Clear all filters")
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(PryTheme.bgHeader)
-        // Cmd+F focuses the search field
-        .onKeyPress(.init("f"), phases: .down) { event in
-            guard event.modifiers.contains(.command) else { return .ignored }
-            searchFocused = true
-            return .handled
-        }
     }
 }
