@@ -4,6 +4,7 @@ import PryLib
 @available(macOS 14, *)
 @MainActor
 struct RulesEditorView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var rulesText: String = ""
     @State private var parseResult: ParseResult = .empty
     @State private var validationTask: Task<Void, Never>?
@@ -45,6 +46,9 @@ struct RulesEditorView: View {
                     rulesText = ""
                     parseResult = .empty
                 }
+
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
