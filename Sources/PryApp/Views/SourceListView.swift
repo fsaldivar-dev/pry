@@ -34,7 +34,11 @@ struct SourceListView: View {
                 "No Requests",
                 systemImage: "antenna.radiowaves.left.and.right.slash",
                 description: Text("Start the proxy and send some traffic")
+                    .foregroundStyle(PryTheme.textSecondary)
             )
+            .foregroundStyle(PryTheme.textPrimary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(PryTheme.bgMain)
         } else {
             List(selection: $store.selectedSource) {
                 Label("All Traffic", systemImage: "arrow.left.arrow.right")
@@ -79,7 +83,7 @@ struct SourceListView: View {
                     } label: {
                         Label {
                             Text(group.id.isEmpty ? "Unknown" : group.id == "tunnel" ? "Passthrough (tunnel)" : group.id)
-                                .foregroundStyle(group.id == "tunnel" ? .secondary : .primary)
+                                .foregroundStyle(group.id == "tunnel" ? PryTheme.textSecondary : PryTheme.textPrimary)
                         } icon: {
                             Text(group.icon)
                         }

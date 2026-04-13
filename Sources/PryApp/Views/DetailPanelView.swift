@@ -1,8 +1,9 @@
 import SwiftUI
+import AppKit
 import PryKit
 import PryLib
 
-/// Bottom detail panel with underline tab navigation.
+/// Bottom detail panel — segmented picker navigation with Copy cURL action.
 @available(macOS 14, *)
 public struct DetailPanelView: View {
     @Environment(RequestStoreWrapper.self) private var store
@@ -27,18 +28,32 @@ public struct DetailPanelView: View {
             BreakpointEditorView(pausedRequest: paused)
         } else if let request = store.selectedRequest {
             VStack(spacing: 0) {
-                // Underline tab bar
-                UnderlineTabBar(
-                    selectedTab: $selectedTab,
-                    visibleTabs: visibleTabs(for: request),
-                    onCopyCurl: {
+                // Segmented picker bar with Copy cURL
+                HStack {
+                    Picker("", selection: $selectedTab) {
+                        let tabs = visibleTabs(for: request)
+                        ForEach(tabs, id: \.self) { tab in
+                            Text(tab.rawValue).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    Spacer()
+                    Button {
                         let curl = CurlGenerator.generate(from: request)
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(curl, forType: .string)
+                    } label: {
+                        Label("Copy cURL", systemImage: "doc.on.doc")
+                            .font(.caption)
                     }
-                )
+                    .buttonStyle(.borderless)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(PryTheme.bgHeader)
 
-                Divider().opacity(0.3)
+                Divider()
 
                 // Tab content
                 Group {
@@ -55,6 +70,7 @@ public struct DetailPanelView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .onChange(of: request.id) {
+                // Keep selected tab when switching between requests (only reset if tab no longer visible)
                 let visible = visibleTabs(for: request)
                 if !visible.contains(selectedTab) {
                     selectedTab = .headers
@@ -69,6 +85,7 @@ public struct DetailPanelView: View {
                     .font(.callout)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(PryTheme.bgPanel)
         }
     }
 

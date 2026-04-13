@@ -26,7 +26,6 @@ struct PryApp: App {
                 .environment(breakpointManager)
         }
         .defaultSize(width: 1200, height: 800)
-        .windowStyle(.hiddenTitleBar)
 
         Settings {
             SettingsView()
