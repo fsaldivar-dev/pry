@@ -31,7 +31,7 @@ struct RulesSettingsView: View {
                         HStack {
                             Text(rule.name)
                                 .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(Color.accentColor)
                             Text(rule.value ?? "")
                                 .font(.system(size: 11, design: .monospaced))
                             Spacer()
