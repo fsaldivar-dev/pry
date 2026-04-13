@@ -54,11 +54,6 @@ struct RequestListView: NSViewRepresentable {
         tableView.backgroundColor = .clear
         scrollView.backgroundColor = .clear
         scrollView.drawsBackground = false
-        // Round corners for glass container clipping
-        scrollView.wantsLayer = true
-        scrollView.layer?.cornerRadius = 16
-        scrollView.layer?.masksToBounds = true
-
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         context.coordinator.tableView = tableView
