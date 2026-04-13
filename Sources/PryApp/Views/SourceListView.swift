@@ -89,6 +89,8 @@ struct SourceListView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .background(PryTheme.bgMain)
             .onChange(of: store.requests.count) {
                 recomputeGroups()
             }

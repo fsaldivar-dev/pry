@@ -41,7 +41,7 @@ public struct DetailPanelView: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .pryBarBackground()
+                .background(PryTheme.bgHeader)
 
                 Divider()
 
@@ -69,12 +69,13 @@ public struct DetailPanelView: View {
         } else {
             HStack(spacing: 6) {
                 Image(systemName: "cursorarrow.click")
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(PryTheme.accent.opacity(0.4))
                 Text("Select a request to inspect")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PryTheme.textSecondary)
                     .font(.callout)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(PryTheme.bgPanel)
         }
     }
 

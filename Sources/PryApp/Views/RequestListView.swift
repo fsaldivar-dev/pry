@@ -50,6 +50,11 @@ struct RequestListView: NSViewRepresentable {
         // Context menu
         tableView.menu = context.coordinator.makeContextMenu()
 
+        // Custom dark background matching TUI palette
+        tableView.backgroundColor = PryTheme.nsBgMain
+        scrollView.backgroundColor = PryTheme.nsBgMain
+        scrollView.drawsBackground = true
+
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         context.coordinator.tableView = tableView
@@ -128,24 +133,27 @@ struct RequestListView: NSViewRepresentable {
             case "method":
                 cell.stringValue = req.method
                 cell.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+                cell.textColor = PryTheme.nsTextPrimary
             case "status":
                 cell.stringValue = req.statusCode.map { "\($0)" } ?? "..."
                 cell.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-                cell.textColor = Self.statusColor(req.statusCode)
+                cell.textColor = PryTheme.statusColor(req.statusCode)
             case "host":
                 cell.stringValue = req.host
                 cell.font = .systemFont(ofSize: 11)
+                cell.textColor = PryTheme.nsTextPrimary
             case "path":
                 cell.stringValue = req.url
                 cell.font = .systemFont(ofSize: 11)
+                cell.textColor = PryTheme.nsTextPrimary
             case "time":
                 cell.stringValue = Self.formatTime(req.timestamp)
                 cell.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-                cell.textColor = .secondaryLabelColor
+                cell.textColor = PryTheme.nsTextSecondary
             case "duration":
                 cell.stringValue = Self.formatDuration(req.duration)
                 cell.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-                cell.textColor = req.duration == nil ? .tertiaryLabelColor : .secondaryLabelColor
+                cell.textColor = req.duration == nil ? PryTheme.nsTextTertiary : PryTheme.nsTextSecondary
                 cell.alignment = .right
             default:
                 break
@@ -281,16 +289,7 @@ struct RequestListView: NSViewRepresentable {
             }
         }
 
-        static func statusColor(_ code: UInt?) -> NSColor {
-            guard let code else { return .secondaryLabelColor }
-            switch code {
-            case 200..<300: return NSColor(red: 0.13, green: 0.68, blue: 0.38, alpha: 1) // green
-            case 300..<400: return NSColor(red: 0.90, green: 0.65, blue: 0.07, alpha: 1) // amber
-            case 400..<500: return NSColor(red: 0.95, green: 0.38, blue: 0.29, alpha: 1) // red-orange
-            case 500...:    return NSColor(red: 0.80, green: 0.10, blue: 0.10, alpha: 1) // dark red
-            default:        return .secondaryLabelColor
-            }
-        }
+        // statusColor moved to PryTheme.statusColor(_:)
 
         // MARK: - Hover highlight (#61)
 
@@ -322,10 +321,15 @@ final class HoverRowView: NSTableRowView {
     override func mouseEntered(with event: NSEvent) { isHovered = true }
     override func mouseExited(with event: NSEvent)  { isHovered = false }
 
+    override func drawSelection(in dirtyRect: NSRect) {
+        PryTheme.nsBgSelected.setFill()
+        dirtyRect.fill()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         if isHovered && !isSelected {
-            NSColor.labelColor.withAlphaComponent(0.06).setFill()
+            PryTheme.nsHover.setFill()
             dirtyRect.fill()
         }
     }

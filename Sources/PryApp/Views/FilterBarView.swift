@@ -106,7 +106,7 @@ struct FilterBarView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .pryBarBackground()
+        .background(PryTheme.bgHeader)
         // Cmd+F focuses the search field
         .onKeyPress(.init("f"), phases: .down) { event in
             guard event.modifiers.contains(.command) else { return .ignored }
