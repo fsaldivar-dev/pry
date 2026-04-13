@@ -19,21 +19,43 @@ struct MainWindow: View {
                 PausedRequestBanner(method: paused.method, url: paused.url)
             }
 
-            HSplitView {
-                // Left sidebar: source filter
-                SourceListView()
-                    .frame(minWidth: 160, idealWidth: 200, maxWidth: 260)
+            if store.requests.isEmpty {
+                // Clean empty state — no split panels when nothing to show
+                VStack(spacing: 16) {
+                    Spacer()
+                    Image(systemName: proxy.isRunning
+                        ? "antenna.radiowaves.left.and.right"
+                        : "antenna.radiowaves.left.and.right.slash")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.tertiary)
+                    Text(proxy.isRunning ? "Waiting for traffic…" : "Proxy Stopped")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    Text(proxy.isRunning
+                        ? "Send requests through port \(String(proxy.port))"
+                        : "Press **Start** to begin capturing")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                HSplitView {
+                    // Left sidebar: source filter
+                    SourceListView()
+                        .frame(minWidth: 160, idealWidth: 200, maxWidth: 260)
 
-                // Right: request list on top, detail panel on bottom
-                VSplitView {
-                    VStack(spacing: 0) {
-                        FilterBarView()
-                        RequestListView()
+                    // Right: request list on top, detail panel on bottom
+                    VSplitView {
+                        VStack(spacing: 0) {
+                            FilterBarView()
+                            RequestListView()
+                        }
+                        .frame(minHeight: 180)
+
+                        DetailPanelView()
+                            .frame(minHeight: 120, idealHeight: 280)
                     }
-                    .frame(minHeight: 180)
-
-                    DetailPanelView()
-                        .frame(minHeight: 120, idealHeight: 280)
                 }
             }
 
