@@ -44,6 +44,7 @@ struct SourceListView: View {
                 Label("All Traffic", systemImage: "arrow.left.arrow.right")
                     .badge(store.requests.count)
                     .tag(SourceFilter.all)
+                    .listRowBackground(Color.clear)
 
                 ForEach(grouped) { group in
                     DisclosureGroup {
@@ -59,6 +60,7 @@ struct SourceListView: View {
                                 .tag(SourceFilter.host(app: group.id, host: entry.host))
                                 .lineLimit(1)
                                 .truncationMode(.middle)
+                                .listRowBackground(Color.clear)
                         }
 
                         if hiddenCount > 0 {
@@ -70,6 +72,7 @@ struct SourceListView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.borderless)
+                            .listRowBackground(Color.clear)
                         } else if isExpanded && group.hosts.count > maxVisibleHosts {
                             Button {
                                 expandedGroups.remove(group.id)
@@ -79,6 +82,7 @@ struct SourceListView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.borderless)
+                            .listRowBackground(Color.clear)
                         }
                     } label: {
                         Label {
@@ -90,6 +94,7 @@ struct SourceListView: View {
                         .badge(group.total)
                         .tag(SourceFilter.app(group.id))
                     }
+                    .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.sidebar)
