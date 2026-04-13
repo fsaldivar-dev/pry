@@ -46,7 +46,7 @@ private struct HeaderSection: View {
                         GridRow {
                             Text(header.0)
                                 .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(Color.accentColor)
                                 .textSelection(.enabled)
                             Text(header.1)
                                 .font(.system(size: 11, design: .monospaced))

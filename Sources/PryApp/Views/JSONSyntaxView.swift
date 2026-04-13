@@ -71,7 +71,7 @@ struct JSONSyntaxView: View {
             // Key in blue
             if let r = Range(match.range(at: 2), in: line) {
                 var key = AttributedString("\"\(line[r])\"")
-                key.foregroundColor = .blue
+                key.foregroundColor = Color("AccentColor")
                 result.append(key)
             }
             // Colon

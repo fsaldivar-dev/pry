@@ -4,7 +4,7 @@ import PryLib
 
 /// Bottom detail panel — segmented picker navigation replaces TabView.
 @available(macOS 14, *)
-struct DetailPanelView: View {
+public struct DetailPanelView: View {
     @Environment(RequestStoreWrapper.self) private var store
     @Environment(BreakpointUIManager.self) private var breakpoints
 
@@ -19,8 +19,10 @@ struct DetailPanelView: View {
     }
 
     @State private var selectedTab: Tab = .headers
+    
+    public init() { }
 
-    var body: some View {
+    public var body: some View {
         if let paused = breakpoints.pausedRequests.first {
             BreakpointEditorView(pausedRequest: paused)
         } else if let request = store.selectedRequest {
@@ -39,7 +41,7 @@ struct DetailPanelView: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(.bar)
+                .pryBarBackground()
 
                 Divider()
 
