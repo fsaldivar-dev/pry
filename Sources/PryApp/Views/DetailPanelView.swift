@@ -2,13 +2,13 @@ import SwiftUI
 import PryKit
 import PryLib
 
-/// Bottom detail panel — segmented picker navigation replaces TabView.
+/// Bottom detail panel with underline tab navigation.
 @available(macOS 14, *)
 public struct DetailPanelView: View {
     @Environment(RequestStoreWrapper.self) private var store
     @Environment(BreakpointUIManager.self) private var breakpoints
 
-    enum Tab: String, CaseIterable {
+    public enum Tab: String, CaseIterable {
         case headers  = "Headers"
         case body     = "Body"
         case query    = "Query"
@@ -19,7 +19,7 @@ public struct DetailPanelView: View {
     }
 
     @State private var selectedTab: Tab = .headers
-    
+
     public init() { }
 
     public var body: some View {
@@ -27,23 +27,18 @@ public struct DetailPanelView: View {
             BreakpointEditorView(pausedRequest: paused)
         } else if let request = store.selectedRequest {
             VStack(spacing: 0) {
-                // Segmented picker bar
-                HStack {
-                    Picker("", selection: $selectedTab) {
-                        let tabs = visibleTabs(for: request)
-                        ForEach(tabs, id: \.self) { tab in
-                            Text(tab.rawValue).tag(tab)
-                        }
+                // Underline tab bar
+                UnderlineTabBar(
+                    selectedTab: $selectedTab,
+                    visibleTabs: visibleTabs(for: request),
+                    onCopyCurl: {
+                        let curl = CurlGenerator.generate(from: request)
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(curl, forType: .string)
                     }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                    Spacer()
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(PryTheme.bgHeader)
+                )
 
-                Divider()
+                Divider().opacity(0.3)
 
                 // Tab content
                 Group {
@@ -60,7 +55,6 @@ public struct DetailPanelView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .onChange(of: request.id) {
-                // Keep selected tab when switching between requests (only reset if tab no longer visible)
                 let visible = visibleTabs(for: request)
                 if !visible.contains(selectedTab) {
                     selectedTab = .headers
@@ -75,11 +69,10 @@ public struct DetailPanelView: View {
                     .font(.callout)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(PryTheme.bgPanel)
         }
     }
 
-    private func visibleTabs(for request: RequestStore.CapturedRequest) -> [Tab] {
+    func visibleTabs(for request: RequestStore.CapturedRequest) -> [Tab] {
         var tabs: [Tab] = [.headers, .body, .query, .cookies, .raw, .code]
         if GraphQLDetector.detect(body: request.requestBody) != nil {
             tabs.append(.graphql)

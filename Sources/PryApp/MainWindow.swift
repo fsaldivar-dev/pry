@@ -13,96 +13,69 @@ struct MainWindow: View {
     @State private var showRules = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Paused request banner
-            if let paused = breakpoints.pausedRequests.first {
-                PausedRequestBanner(method: paused.method, url: paused.url)
-            }
+        ZStack {
+            // Gradient orbs background
+            BackgroundView()
 
-            if store.requests.isEmpty {
-                // Clean empty state — no split panels when nothing to show
-                VStack(spacing: 16) {
-                    Spacer()
-                    Image(systemName: proxy.isRunning
-                        ? "antenna.radiowaves.left.and.right"
-                        : "antenna.radiowaves.left.and.right.slash")
-                        .font(.system(size: 48))
-                        .foregroundStyle(PryTheme.accent.opacity(0.6))
-                    Text(proxy.isRunning ? "Waiting for traffic…" : "Proxy Stopped")
-                        .font(.title2)
-                        .foregroundStyle(PryTheme.textSecondary)
-                    Text(proxy.isRunning
-                        ? "Send requests through port \(String(proxy.port))"
-                        : "Press **Start** to begin capturing")
-                        .font(.callout)
-                        .foregroundStyle(PryTheme.textTertiary)
-                    Spacer()
+            VStack(spacing: 0) {
+                // Paused request banner
+                if let paused = breakpoints.pausedRequests.first {
+                    PausedRequestBanner(method: paused.method, url: paused.url)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                HSplitView {
-                    // Left sidebar: source filter
-                    SourceListView()
-                        .frame(minWidth: 160, idealWidth: 200, maxWidth: 260)
 
-                    // Right: request list on top, detail panel on bottom
-                    VSplitView {
-                        VStack(spacing: 0) {
-                            FilterBarView()
-                            RequestListView()
+                // Custom header bar (replaces native toolbar)
+                HeaderBarView(
+                    showMocks: $showMocks,
+                    showBreakpoints: $showBreakpoints,
+                    showRules: $showRules
+                )
+
+                if store.requests.isEmpty {
+                    // Empty state
+                    VStack(spacing: 16) {
+                        Spacer()
+                        Image(systemName: proxy.isRunning
+                            ? "antenna.radiowaves.left.and.right"
+                            : "antenna.radiowaves.left.and.right.slash")
+                            .font(.system(size: 48))
+                            .foregroundStyle(PryTheme.accent.opacity(0.6))
+                        Text(proxy.isRunning ? "Waiting for traffic…" : "Proxy Stopped")
+                            .font(.title2)
+                            .foregroundStyle(PryTheme.textSecondary)
+                        Text(proxy.isRunning
+                            ? "Send requests through port \(String(proxy.port))"
+                            : "Press **Start** to begin capturing")
+                            .font(.callout)
+                            .foregroundStyle(PryTheme.textTertiary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Main content: sidebar + glass panels
+                    HStack(spacing: 0) {
+                        SidebarView()
+                            .frame(width: 260)
+
+                        VStack(spacing: 10) {
+                            // Request table in glass container
+                            GlassContainer(style: .light) {
+                                VStack(spacing: 0) {
+                                    FilterBarView()
+                                    RequestListView()
+                                }
+                            }
+
+                            // Detail panel in dark glass container
+                            GlassContainer(style: .dark) {
+                                DetailPanelView()
+                            }
+                            .frame(minHeight: 200, idealHeight: 280)
                         }
-                        .frame(minHeight: 180)
-
-                        DetailPanelView()
-                            .frame(minHeight: 120, idealHeight: 280)
+                        .padding(10)
                     }
                 }
-            }
 
-            StatusBarView()
-        }
-        .background(PryTheme.bgMain)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    toggleProxy()
-                } label: {
-                    Image(systemName: proxy.isRunning ? "stop.fill" : "play.fill")
-                    Text(proxy.isRunning ? "Stop" : "Start")
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    store.clear()
-                } label: {
-                    Image(systemName: "trash")
-                    Text("Clear")
-                }
-                .help("Clear all captured requests")
-            }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    showMocks.toggle()
-                } label: {
-                    Image(systemName: "theatermask.and.paintbrush")
-                    Text("Mocks")
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    showBreakpoints.toggle()
-                } label: {
-                    Image(systemName: "pause.circle")
-                    Text("Breakpoints")
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    showRules.toggle()
-                } label: {
-                    Image(systemName: "list.bullet.rectangle")
-                    Text("Rules")
-                }
+                FooterBarView()
             }
         }
         .sheet(isPresented: $showMocks) {
@@ -116,18 +89,6 @@ struct MainWindow: View {
         .sheet(isPresented: $showRules) {
             RulesEditorView()
                 .frame(minWidth: 600, minHeight: 500)
-        }
-    }
-
-    private func toggleProxy() {
-        if proxy.isRunning {
-            proxy.stop()
-        } else {
-            do {
-                try proxy.start()
-            } catch {
-                print("Failed to start proxy: \(error)")
-            }
         }
     }
 }
