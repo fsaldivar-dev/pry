@@ -17,6 +17,8 @@ public final class ProxyManager {
 
     public init(port: Int = Config.port()) {
         self.port = port
+        // Check for orphaned proxy config from a previous crash
+        ProxyGuard.cleanupIfNeeded()
     }
 
     public func start() throws {
@@ -65,6 +67,7 @@ public final class ProxyManager {
     deinit {
         // Ensure system proxy is restored even on unexpected termination
         SystemProxy.disable()
+        ProxyState.clear()
         serverBox.shutdownIfNeeded()
     }
 }
