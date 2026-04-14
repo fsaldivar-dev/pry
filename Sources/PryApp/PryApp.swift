@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import PryKit
+import PryLib
 
 @available(macOS 14, *)
 @MainActor
@@ -41,6 +42,8 @@ struct PryApp: App {
 @available(macOS 14, *)
 final class PryAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Clean up orphaned proxy config from a previous crash
+        ProxyGuard.cleanupIfNeeded()
         // Force dark appearance and custom background on ALL windows
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)

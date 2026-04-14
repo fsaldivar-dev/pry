@@ -74,6 +74,9 @@ guard let command = args.first else {
     exit(0)
 }
 
+// Check for orphaned proxy config on every CLI invocation
+ProxyGuard.cleanupIfNeeded()
+
 switch command {
 case "start":
     var port = Config.defaultPort
@@ -117,16 +120,25 @@ case "start":
     }
 
     let server = ProxyServer(port: port)
+    ProxyGuard.installAtexitHandler()
     let headless = args.contains("--headless")
 
     if headless {
         // Headless mode — direct print, blocking
         signal(SIGINT) { _ in
             print("\n🐱 Pry stopped")
+            if let state = ProxyState.load() {
+                SystemProxy.disable(service: state.networkService)
+            }
+            ProxyState.clear()
             try? FileManager.default.removeItem(atPath: Config.pidFile)
             exit(0)
         }
         signal(SIGTERM) { _ in
+            if let state = ProxyState.load() {
+                SystemProxy.disable(service: state.networkService)
+            }
+            ProxyState.clear()
             try? FileManager.default.removeItem(atPath: Config.pidFile)
             exit(0)
         }
@@ -243,8 +255,12 @@ case "start":
         tui.start()
 
         // TUI exited — cleanup
+        if let state = ProxyState.load(),
+           state.pid == ProcessInfo.processInfo.processIdentifier {
+            SystemProxy.disable(service: state.networkService)
+            ProxyState.clear()
+        }
         server.shutdown()
-        try? FileManager.default.removeItem(atPath: Config.pidFile)
     }
 
 case "stop":
