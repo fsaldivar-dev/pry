@@ -13,6 +13,7 @@ struct MainWindow: View {
     @State private var showRules = false
     @State private var sidebarWidth: CGFloat = 220
     @State private var detailHeight: CGFloat = 280
+    @State private var showSidebar = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,7 +22,6 @@ struct MainWindow: View {
             }
 
             if store.requests.isEmpty {
-                // Empty state
                 VStack(spacing: 16) {
                     Spacer()
                     Image(systemName: proxy.isRunning
@@ -41,31 +41,29 @@ struct MainWindow: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Main layout: sidebar | content (all with uniform bgMain)
                 HStack(spacing: 0) {
-                    // Sidebar with custom cards
-                    SidebarView()
-                        .frame(width: sidebarWidth)
+                    // Collapsible sidebar
+                    if showSidebar {
+                        SidebarView()
+                            .frame(width: sidebarWidth)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
 
-                    // Vertical drag handle
-                    DragDivider(axis: .vertical) { delta in
-                        sidebarWidth = max(160, min(350, sidebarWidth + delta))
+                        DragDivider(axis: .vertical) { delta in
+                            sidebarWidth = max(140, min(300, sidebarWidth + delta))
+                        }
                     }
 
                     // Right content
                     VStack(spacing: 0) {
-                        // Top: filter + request list
                         VStack(spacing: 0) {
                             FilterBarView()
                             RequestListView()
                         }
 
-                        // Horizontal drag handle
                         DragDivider(axis: .horizontal) { delta in
-                            detailHeight = max(100, detailHeight - delta)
+                            detailHeight = max(80, detailHeight - delta)
                         }
 
-                        // Bottom: detail panel
                         DetailPanelView()
                             .frame(height: detailHeight)
                     }
@@ -77,6 +75,16 @@ struct MainWindow: View {
         .background(PryTheme.bgMain)
         .toolbarBackground(.hidden)
         .toolbar {
+            // Sidebar toggle
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { showSidebar.toggle() }
+                } label: {
+                    Image(systemName: "sidebar.left")
+                }
+                .help("Toggle Sidebar (⌘0)")
+                .keyboardShortcut("0", modifiers: .command)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { toggleProxy() } label: {
                     Image(systemName: proxy.isRunning ? "stop.fill" : "play.fill")
@@ -140,7 +148,6 @@ struct DragDivider: View {
     var body: some View {
         Group {
             if axis == .vertical {
-                // Sidebar ↔ Content divider
                 Rectangle()
                     .fill(Color.white.opacity(0.06))
                     .frame(width: 1)
@@ -153,7 +160,6 @@ struct DragDivider: View {
                         .onChanged { value in onDrag(value.translation.width) }
                     )
             } else {
-                // List ↕ Detail divider
                 Rectangle()
                     .fill(Color.white.opacity(0.06))
                     .frame(height: 1)
