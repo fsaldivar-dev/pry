@@ -7,7 +7,6 @@ struct FooterBarView: View {
     @Environment(ProxyManager.self) private var proxy
     @Environment(RequestStoreWrapper.self) private var store
     @Environment(MockManager.self) private var mocks
-    @Environment(ScenarioUIManager.self) private var scenarios
 
     var body: some View {
         HStack(spacing: 0) {
@@ -34,11 +33,12 @@ struct FooterBarView: View {
                 }
 
                 // Active scenario
-                if let active = scenarios.activeScenario {
+                if let project = ProjectManager.activeProject(),
+                   let scenario = ProjectManager.activeScenario() {
                     HStack(spacing: 4) {
                         Image(systemName: "film.stack")
                             .font(.system(size: 8))
-                        Text(active.uppercased())
+                        Text("\(project)/\(scenario)".uppercased())
                             .tracking(1.5)
                     }
                     .foregroundStyle(PryTheme.success)
