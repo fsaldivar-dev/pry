@@ -56,6 +56,7 @@ public struct SystemProxy {
         run("/usr/sbin/networksetup", ["-setwebproxystate", service, "on"])
         run("/usr/sbin/networksetup", ["-setsecurewebproxystate", service, "on"])
         print("[SystemProxy] Enabled on \(service) → localhost:\(port)")
+        ProxyState.save(port: port, pid: ProcessInfo.processInfo.processIdentifier, networkService: service)
     }
 
     /// Disable HTTP + HTTPS proxy on the active network service.
@@ -64,9 +65,16 @@ public struct SystemProxy {
             print("[SystemProxy] Could not detect active network service")
             return
         }
+        disable(service: service)
+        ProxyState.clear()
+    }
+
+    /// Disable HTTP + HTTPS proxy on a specific network service.
+    public static func disable(service: String) {
         run("/usr/sbin/networksetup", ["-setwebproxystate", service, "off"])
         run("/usr/sbin/networksetup", ["-setsecurewebproxystate", service, "off"])
         print("[SystemProxy] Disabled on \(service)")
+        ProxyState.clear()
     }
 
     /// Check if system proxy is currently pointing to our port.
