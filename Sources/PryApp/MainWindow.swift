@@ -8,7 +8,8 @@ struct MainWindow: View {
     @Environment(ProxyManager.self) private var proxy
     @Environment(RequestStoreWrapper.self) private var store
     @Environment(BreakpointUIManager.self) private var breakpoints
-    @State private var showMocks = false
+    @Environment(RecorderUIManager.self) private var recorderManager
+    @State private var showMocking = false
     @State private var showBreakpoints = false
     @State private var showRules = false
     @State private var sidebarWidth: CGFloat = 220
@@ -19,6 +20,10 @@ struct MainWindow: View {
         VStack(spacing: 0) {
             if let paused = breakpoints.pausedRequests.first {
                 PausedRequestBanner(method: paused.method, url: paused.url)
+            }
+
+            if recorderManager.isRecording {
+                RecorderBannerView()
             }
 
             if store.requests.isEmpty {
@@ -99,9 +104,9 @@ struct MainWindow: View {
                 .help("Clear all captured requests")
             }
             ToolbarItem(placement: .automatic) {
-                Button { showMocks.toggle() } label: {
+                Button { showMocking.toggle() } label: {
                     Image(systemName: "theatermask.and.paintbrush")
-                    Text("Mocks")
+                    Text("Mocking")
                 }
             }
             ToolbarItem(placement: .automatic) {
@@ -117,8 +122,8 @@ struct MainWindow: View {
                 }
             }
         }
-        .sheet(isPresented: $showMocks) {
-            MockListView().frame(minWidth: 500, minHeight: 400)
+        .sheet(isPresented: $showMocking) {
+            UnifiedMockView().frame(minWidth: 800, minHeight: 500)
         }
         .sheet(isPresented: $showBreakpoints) {
             BreakpointListView().frame(minWidth: 500, minHeight: 400)

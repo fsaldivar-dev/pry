@@ -74,4 +74,28 @@ enum PryTheme {
         default:        return nsTextSecondary
         }
     }
+
+    /// SwiftUI Color version of statusColor for use in .foregroundStyle().
+    static func statusColorSwiftUI(_ code: UInt?) -> Color {
+        guard let code else { return textSecondary }
+        switch code {
+        case 200..<300: return success
+        case 300..<400: return warning
+        case 400..<500: return error
+        case 500...:    return Color(red: 0.80, green: 0.10, blue: 0.10)
+        default:        return textSecondary
+        }
+    }
+
+    /// SwiftUI Color for HTTP method badges.
+    static func methodColor(_ method: String?) -> Color {
+        switch method?.uppercased() {
+        case "GET":    return .green
+        case "POST":   return .blue
+        case "PUT":    return .orange
+        case "PATCH":  return .yellow
+        case "DELETE": return .red
+        default:       return .gray
+        }
+    }
 }
