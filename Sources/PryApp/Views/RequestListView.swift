@@ -22,8 +22,8 @@ struct RequestListView: NSViewRepresentable {
             ("icon",     "",         28,  false),
             ("method",   "Method",   68,  false),
             ("status",   "Status",   56,  false),
-            ("host",     "Host",     150, false),
-            ("path",     "Path",     200, true),   // stretches to fill
+            ("host",     "Host",     120, true),   // flexible
+            ("path",     "Path",     150, true),   // flexible
             ("duration", "Duration", 64,  false),
             ("time",     "Time",     60,  false),
         ]
