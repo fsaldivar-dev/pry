@@ -12,6 +12,7 @@ struct MainWindow: View {
     @State private var showMocking = false
     @State private var showBreakpoints = false
     @State private var showRules = false
+    @State private var showDeviceSetup = false
     @State private var sidebarWidth: CGFloat = 220
     @State private var detailHeight: CGFloat = 280
     @State private var showSidebar = true
@@ -121,6 +122,12 @@ struct MainWindow: View {
                     Text("Rules")
                 }
             }
+            ToolbarItem(placement: .automatic) {
+                Button { showDeviceSetup.toggle() } label: {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                    Text("Device")
+                }
+            }
         }
         .sheet(isPresented: $showMocking) {
             UnifiedMockView().frame(minWidth: 800, minHeight: 500)
@@ -130,6 +137,9 @@ struct MainWindow: View {
         }
         .sheet(isPresented: $showRules) {
             RulesEditorView().frame(minWidth: 600, minHeight: 500)
+        }
+        .sheet(isPresented: $showDeviceSetup) {
+            DeviceSetupView().frame(minWidth: 450, minHeight: 400)
         }
     }
 
