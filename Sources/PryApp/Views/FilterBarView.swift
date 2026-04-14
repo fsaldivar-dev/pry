@@ -95,14 +95,52 @@ struct FilterBarView: View {
             }
             .buttonStyle(.borderless)
 
+            // Source filter — mocked vs real
+            Menu {
+                Button("All Sources") { store.filterMockSource = .all }
+                Divider()
+                ForEach(MockSourceFilter.allCases.filter { $0 != .all }, id: \.self) { source in
+                    Button {
+                        store.filterMockSource = store.filterMockSource == source ? .all : source
+                    } label: {
+                        HStack {
+                            Text(source.rawValue)
+                            if store.filterMockSource == source {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                let isActive = store.filterMockSource != .all
+                HStack(spacing: 4) {
+                    Image(systemName: "shippingbox")
+                        .font(.system(size: 10))
+                    Text(isActive ? store.filterMockSource.rawValue : "Source")
+                        .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+                }
+                .foregroundStyle(isActive ? PryTheme.accent : PryTheme.textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(isActive ? PryTheme.accent.opacity(0.12) : Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
+            }
+            .buttonStyle(.borderless)
+
             // Clear all
             let hasActive = store.filterMethod != nil ||
                             store.filterStatus != nil ||
+                            store.filterMockSource != .all ||
                             !store.filterText.isEmpty
             if hasActive {
                 Button {
                     store.filterMethod = nil
                     store.filterStatus = nil
+                    store.filterMockSource = .all
                     store.filterText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")

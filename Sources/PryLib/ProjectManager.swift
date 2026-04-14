@@ -202,7 +202,6 @@ public struct ProjectManager {
             }
         }
         MockEngine.shared.loadScenarioMocks(scenarioData.mocks)
-        print("[ProjectManager] Activated \(project)/\(scenario) with \(scenarioData.mocks.count) mocks, MockEngine now has \(MockEngine.shared.count) total")
         for header in scenarioData.headers {
             if header.action == "add", let value = header.value {
                 HeaderRewrite.addRule(name: header.name, value: value)
