@@ -407,6 +407,34 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
             return
         }
 
+        // Legacy mock fallback — for mocks added via CLI while proxy is running
+        let legacyMocks = Config.loadMocks()
+        for (mockKey, response) in legacyMocks {
+            let matches: Bool
+            if mockKey.contains(":") {
+                let parts = mockKey.split(separator: ":", maxSplits: 1)
+                matches = host.contains(String(parts[0])) && head.uri.hasPrefix(String(parts[1]))
+            } else {
+                matches = head.uri.hasPrefix(mockKey)
+            }
+            if matches {
+                let legacyMock = UnifiedMock(pattern: mockKey, body: response, source: .loose)
+                let ct = "application/json"
+                BodyPrinter.printMock(path: head.uri, json: response)
+                BodyPrinter.storeResponse(requestId: requestId, statusCode: 200, headers: [("Content-Type", ct)], body: response, isMock: true, mockSource: "loose")
+                var headers = HTTPHeaders()
+                headers.add(name: "Content-Type", value: ct)
+                headers.add(name: "X-Pry-Mock", value: "true")
+                let responseHead = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
+                context.write(self.wrapOutboundOut(.head(responseHead)), promise: nil)
+                var buffer = context.channel.allocator.buffer(capacity: response.utf8.count)
+                buffer.writeString(response)
+                context.write(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+                context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
+                return
+            }
+        }
+
         // Rule Engine: apply scripting rules
         let matchingRules = RuleEngine.matchingRules(for: head.uri, method: "\(head.method)")
         if !matchingRules.isEmpty {

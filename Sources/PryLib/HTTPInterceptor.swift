@@ -123,6 +123,23 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
             return
         }
 
+        // Legacy mock fallback — for mocks added via CLI while proxy is running
+        let legacyMocks = Config.loadMocks()
+        for (mockKey, response) in legacyMocks {
+            let matches: Bool
+            if mockKey.contains(":") {
+                let parts = mockKey.split(separator: ":", maxSplits: 1)
+                matches = host.contains(String(parts[0])) && path.hasPrefix(String(parts[1]))
+            } else {
+                matches = path.hasPrefix(mockKey)
+            }
+            if matches {
+                let legacyMock = UnifiedMock(pattern: mockKey, body: response, source: .loose)
+                respondWithUnifiedMock(context: context, mock: legacyMock, path: path, host: host, requestId: requestId)
+                return
+            }
+        }
+
         // Map Local check (regex → local file)
         if let fileContent = MapLocal.matchContent(url: path) {
             let mapMock = UnifiedMock(pattern: path, body: fileContent, source: .loose)
