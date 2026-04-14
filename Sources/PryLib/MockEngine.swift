@@ -16,6 +16,11 @@ public final class MockEngine {
     /// Find a matching mock. Loose mocks checked first (higher priority).
     public func findMock(path: String, host: String, method: String) -> UnifiedMock? {
         queue.sync {
+            print("[MockEngine] findMock path=\(path) host=\(host) method=\(method) loose=\(looseMocks.count) scenario=\(scenarioMocks.count)")
+            for m in looseMocks + scenarioMocks {
+                let matches = m.matches(path: path, host: host, method: method)
+                print("[MockEngine]   \(matches ? "✅" : "❌") pattern=\(m.pattern) mockHost=\(m.host ?? "nil") mockMethod=\(m.method ?? "nil")")
+            }
             // Loose mocks first (ad-hoc overrides)
             if let mock = looseMocks.first(where: { $0.matches(path: path, host: host, method: method) }) {
                 return mock

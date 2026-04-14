@@ -85,6 +85,7 @@ public class RequestStore {
         public var wsFrames: [WSFrame] = []
         public var graphqlOperation: String?
         public var mockSource: String?
+        public var projectTag: String?
         /// Round-trip time from request received to response complete (nil until response arrives).
         public var duration: TimeInterval?
 
@@ -158,6 +159,14 @@ public class RequestStore {
             }
         }
         onChange?()
+    }
+
+    public func tagProject(id: Int, project: String) {
+        queue.sync {
+            if let idx = entries.firstIndex(where: { $0.id == id }) {
+                entries[idx].projectTag = project
+            }
+        }
     }
 
     public func getAll() -> [CapturedRequest] {

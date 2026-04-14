@@ -400,8 +400,10 @@ struct RequestListView: NSViewRepresentable {
 
         @objc private func copyURL(_ sender: NSMenuItem) {
             guard let req = sender.representedObject as? RequestStore.CapturedRequest else { return }
+            let scheme = Watchlist.matches(req.host) ? "https" : "http"
+            let fullURL = "\(scheme)://\(req.host)\(req.url)"
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(req.url, forType: .string)
+            NSPasteboard.general.setString(fullURL, forType: .string)
         }
 
         @objc private func copyAsCurl(_ sender: NSMenuItem) {

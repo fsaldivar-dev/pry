@@ -250,10 +250,11 @@ struct SidebarView: View {
 
     @ViewBuilder
     private var activeConfigSection: some View {
-        let mockCount = mocks.mocks.count
+        let mockCount = MockEngine.shared.count
         let bpCount = breakpoints.patterns.count
-        let overrideCount = overrides.overrides.count
-        let hasAnyConfig = scenarios.activeScenario != nil || mockCount > 0 || bpCount > 0 || overrideCount > 0
+        let activeProject = ProjectManager.activeProject()
+        let activeScenario = ProjectManager.activeScenario()
+        let hasAnyConfig = activeScenario != nil || mockCount > 0 || bpCount > 0
 
         if hasAnyConfig {
             VStack(alignment: .leading, spacing: 6) {
@@ -263,12 +264,12 @@ struct SidebarView: View {
                     .tracking(1.5)
                     .padding(.horizontal, 12)
 
-                if let activeLabel = scenarios.activeScenario {
+                if let project = activeProject, let scenario = activeScenario {
                     HStack(spacing: 6) {
                         Image(systemName: "film.stack")
                             .foregroundStyle(PryTheme.success)
                             .font(.caption)
-                        Text(activeLabel)
+                        Text("\(project) / \(scenario)")
                             .font(.system(size: 11))
                             .lineLimit(1)
                     }
@@ -297,16 +298,6 @@ struct SidebarView: View {
                     .padding(.horizontal, 12)
                 }
 
-                if overrideCount > 0 {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundStyle(PryTheme.warning)
-                            .font(.caption)
-                        Text("\(overrideCount) Overrides")
-                            .font(.system(size: 11))
-                    }
-                    .padding(.horizontal, 12)
-                }
             }
             .padding(.vertical, 8)
         }

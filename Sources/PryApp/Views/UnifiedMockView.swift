@@ -21,6 +21,8 @@ struct UnifiedMockView: View {
     @State private var showNewScenario = false
     @State private var newName = ""
     @State private var selectedProject = ""  // for new scenario dialog
+    @State private var showRecordingResult = false
+    @State private var lastRecording: Recording?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -83,6 +85,12 @@ struct UnifiedMockView: View {
         .sheet(isPresented: $showAddMock) {
             AddUnifiedMockView(selection: selection)
                 .frame(minWidth: 450, minHeight: 350)
+        }
+        .sheet(isPresented: $showRecordingResult) {
+            if let recording = lastRecording {
+                RecordingResultView(recording: recording, selection: selection)
+                    .frame(minWidth: 550, minHeight: 400)
+            }
         }
     }
 
@@ -303,6 +311,12 @@ struct UnifiedMockView: View {
 
             Divider()
 
+            // Tracking Config
+            if let proj = projectManager.loadProject(name: project) {
+                ProjectTrackingSection(project: project, tracking: proj.tracking, projectManager: projectManager)
+                Divider()
+            }
+
             let scenarios = projectManager.listScenarios(project: project)
             if scenarios.isEmpty {
                 ContentUnavailableView(
@@ -403,9 +417,19 @@ struct UnifiedMockView: View {
 
                 Button {
                     if recorder.isRecording {
-                        recorder.stop()
+                        if let recording = recorder.stop() {
+                            lastRecording = recording
+                            showRecordingResult = true
+                        }
                     } else {
-                        recorder.start(name: "\(project)-\(scenario)")
+                        // Get project domains and ensure they're in the watchlist for HTTPS interception
+                        let domains = projectManager.loadProject(name: project)?.tracking.domains ?? []
+                        for domain in domains {
+                            if !Watchlist.load().contains(domain) {
+                                Watchlist.add(domain)
+                            }
+                        }
+                        recorder.start(name: "\(project)-\(scenario)", domains: domains)
                     }
                 } label: {
                     Image(systemName: recorder.isRecording ? "stop.fill" : "record.circle")
@@ -466,6 +490,7 @@ private struct UnifiedMockRow: View {
     let mock: UnifiedMock
     let onDelete: () -> Void
     @State private var showDeleteConfirmation = false
+    @State private var showDetail = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -478,18 +503,19 @@ private struct UnifiedMockRow: View {
                 .foregroundStyle(PryTheme.methodColor(mock.method))
                 .clipShape(RoundedRectangle(cornerRadius: 3))
 
-            // Pattern
+            // Pattern (show host + path for clarity)
             VStack(alignment: .leading, spacing: 1) {
-                Text(mock.pattern)
+                Text(displayPattern)
                     .font(.system(size: 12, design: .monospaced))
                     .lineLimit(1)
                 if !mock.body.isEmpty && mock.body != "{}" {
-                    Text(mock.body.prefix(60))
+                    Text(String(mock.body.prefix(60)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
+            .onTapGesture { showDetail = true }
 
             Spacer()
 
@@ -520,6 +546,144 @@ private struct UnifiedMockRow: View {
             .buttonStyle(.borderless)
             .confirmationDialog("Delete mock for \(mock.pattern)?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
                 Button("Delete", role: .destructive, action: onDelete)
+            }
+        }
+        .sheet(isPresented: $showDetail) {
+            MockDetailView(mock: mock)
+                .frame(minWidth: 500, minHeight: 400)
+        }
+    }
+
+    private var displayPattern: String {
+        if let host = mock.host, !host.isEmpty {
+            return "\(host)\(mock.pattern)"
+        }
+        return mock.pattern
+    }
+}
+
+// MARK: - Mock Detail View
+
+@available(macOS 14, *)
+private struct MockDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    let mock: UnifiedMock
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Mock Detail")
+                    .font(.headline)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Method + Status
+                    HStack(spacing: 8) {
+                        Text(mock.method ?? "ANY")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(PryTheme.methodColor(mock.method).opacity(0.2))
+                            .foregroundStyle(PryTheme.methodColor(mock.method))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+
+                        Text("\(mock.status)")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundStyle(PryTheme.statusColorSwiftUI(mock.status))
+
+                        if let delay = mock.delay, delay > 0 {
+                            Text("\(delay)ms delay")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if let source = mock.source {
+                            Text(source.label)
+                                .font(.caption)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(PryTheme.accent.opacity(0.1))
+                                .foregroundStyle(PryTheme.accent)
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    // Pattern
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Pattern")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        Text(mock.pattern)
+                            .font(.system(size: 13, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+
+                    // Host
+                    if let host = mock.host, !host.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Host")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Text(host)
+                                .font(.system(size: 13, design: .monospaced))
+                                .textSelection(.enabled)
+                        }
+                    }
+
+                    // Response Body
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Response Body")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            Text(mock.body)
+                                .font(.system(size: 12, design: .monospaced))
+                                .textSelection(.enabled)
+                        }
+                        .frame(maxHeight: 200)
+                        .padding(8)
+                        .background(PryTheme.bgPanel)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+
+                    // Custom Headers
+                    if let headers = mock.headers, !headers.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Custom Headers")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            ForEach(Array(headers.keys.sorted()), id: \.self) { key in
+                                HStack {
+                                    Text(key)
+                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                        .foregroundStyle(PryTheme.accent)
+                                    Text(headers[key] ?? "")
+                                        .font(.system(size: 11, design: .monospaced))
+                                }
+                            }
+                        }
+                    }
+
+                    // Notes
+                    if let notes = mock.notes, !notes.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Notes")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Text(notes)
+                                .font(.system(size: 12))
+                        }
+                    }
+                }
+                .padding(12)
             }
         }
     }
@@ -643,6 +807,300 @@ private struct AddUnifiedMockView: View {
                 )
                 scenarioData.mocks.append(scenarioMock)
                 try? projectManager.saveScenario(scenarioData, project: project)
+            }
+        }
+    }
+}
+
+// MARK: - Project Tracking Config Section
+
+@available(macOS 14, *)
+private struct ProjectTrackingSection: View {
+    let project: String
+    let tracking: TrackingConfig
+    let projectManager: ProjectUIManager
+
+    @State private var newDomain = ""
+    @State private var newUA = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("TRACKING")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(PryTheme.textTertiary)
+                    .tracking(1.5)
+                Spacer()
+                Picker("", selection: Binding(
+                    get: { tracking.mode },
+                    set: { newMode in
+                        var config = tracking
+                        config.mode = newMode
+                        projectManager.updateTracking(project: project, config: config)
+                    }
+                )) {
+                    Text("Domain").tag(TrackingMode.domain)
+                    Text("UA").tag(TrackingMode.userAgent)
+                    Text("Both").tag(TrackingMode.both)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 180)
+                .controlSize(.small)
+            }
+
+            // Domains
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Domains")
+                    .font(.caption.weight(.medium))
+                ForEach(tracking.domains, id: \.self) { domain in
+                    HStack(spacing: 4) {
+                        Image(systemName: "globe")
+                            .font(.system(size: 9))
+                            .foregroundStyle(PryTheme.accent)
+                        Text(domain)
+                            .font(.system(size: 11, design: .monospaced))
+                        Spacer()
+                        Button {
+                            var config = tracking
+                            config.domains.removeAll { $0 == domain }
+                            projectManager.updateTracking(project: project, config: config)
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                HStack(spacing: 4) {
+                    TextField("api.example.com", text: $newDomain)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { addDomain() }
+                    Button("Add") { addDomain() }
+                        .controlSize(.small)
+                        .disabled(newDomain.isEmpty)
+                }
+            }
+
+            // User-Agents
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("User-Agents")
+                        .font(.caption.weight(.medium))
+                    if tracking.autoDetect {
+                        Text("auto")
+                            .font(.system(size: 9))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(PryTheme.success.opacity(0.2))
+                            .foregroundStyle(PryTheme.success)
+                            .clipShape(Capsule())
+                    }
+                }
+                ForEach(tracking.userAgents, id: \.self) { ua in
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.circle")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                        Text(ua)
+                            .font(.system(size: 11, design: .monospaced))
+                            .lineLimit(1)
+                        Spacer()
+                        Button {
+                            var config = tracking
+                            config.userAgents.removeAll { $0 == ua }
+                            projectManager.updateTracking(project: project, config: config)
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if tracking.userAgents.isEmpty {
+                    Text("Auto-detected from intercepted traffic")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                HStack(spacing: 4) {
+                    TextField("MyApp/*", text: $newUA)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { addUA() }
+                    Button("Add") { addUA() }
+                        .controlSize(.small)
+                        .disabled(newUA.isEmpty)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private func addDomain() {
+        guard !newDomain.isEmpty else { return }
+        // Sanitize: extract domain from URL if user pastes a full URL
+        var domain = newDomain.lowercased()
+            .replacingOccurrences(of: "https://", with: "")
+            .replacingOccurrences(of: "http://", with: "")
+        // Remove path, query, port
+        if let slashIdx = domain.firstIndex(of: "/") { domain = String(domain[..<slashIdx]) }
+        if let colonIdx = domain.firstIndex(of: ":") { domain = String(domain[..<colonIdx]) }
+        domain = domain.trimmingCharacters(in: .whitespaces)
+        guard !domain.isEmpty else { return }
+        var config = tracking
+        if !config.domains.contains(domain) {
+            config.domains.append(domain)
+            projectManager.updateTracking(project: project, config: config)
+        }
+        newDomain = ""
+    }
+
+    private func addUA() {
+        guard !newUA.isEmpty else { return }
+        var config = tracking
+        config.userAgents.append(newUA)
+        projectManager.updateTracking(project: project, config: config)
+        newUA = ""
+    }
+}
+
+// MARK: - Recording Result View (shown after Stop)
+
+@available(macOS 14, *)
+private struct RecordingResultView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(ProjectUIManager.self) private var projectManager
+
+    let recording: Recording
+    let selection: UnifiedMockView.Selection
+
+    @State private var selectedSteps: Set<Int> = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Recording Complete")
+                    .font(.headline)
+                Text("\(recording.steps.count) requests")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Dismiss") { dismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            Text("Select requests to convert to mocks:")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+
+            List {
+                ForEach(Array(recording.steps.enumerated()), id: \.offset) { idx, step in
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: Binding(
+                            get: { selectedSteps.contains(idx) },
+                            set: { if $0 { selectedSteps.insert(idx) } else { selectedSteps.remove(idx) } }
+                        ))
+                        .toggleStyle(.checkbox)
+
+                        Text(step.method)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(PryTheme.methodColor(step.method).opacity(0.2))
+                            .foregroundStyle(PryTheme.methodColor(step.method))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+
+                        Text(step.url)
+                            .font(.system(size: 12, design: .monospaced))
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        if let status = step.statusCode {
+                            Text("\(status)")
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundStyle(PryTheme.statusColorSwiftUI(status))
+                        }
+
+                        Text("\(step.latencyMs)ms")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .listStyle(.inset)
+            .onAppear {
+                // Select all by default
+                selectedSteps = Set(0..<recording.steps.count)
+            }
+
+            Divider()
+
+            HStack {
+                Button("Select All") {
+                    selectedSteps = Set(0..<recording.steps.count)
+                }
+                .controlSize(.small)
+                Button("Select None") {
+                    selectedSteps = []
+                }
+                .controlSize(.small)
+
+                Spacer()
+
+                Button {
+                    createMocksFromSelected()
+                    dismiss()
+                } label: {
+                    Image(systemName: "theatermask.and.paintbrush")
+                    Text("Create \(selectedSteps.count) Mocks")
+                }
+                .disabled(selectedSteps.isEmpty)
+                .controlSize(.small)
+                .tint(PryTheme.accent)
+            }
+            .padding(12)
+        }
+    }
+
+    private func createMocksFromSelected() {
+        for idx in selectedSteps.sorted() {
+            guard idx < recording.steps.count else { continue }
+            let step = recording.steps[idx]
+            // Extract path from URL (head.uri can be full URL for HTTP or just path for HTTPS)
+            var mockPattern = step.url
+            if mockPattern.hasPrefix("http://") || mockPattern.hasPrefix("https://") {
+                if let url = URL(string: mockPattern) {
+                    mockPattern = url.path.isEmpty ? "/" : url.path
+                }
+            }
+            let mock = UnifiedMock(
+                method: step.method,
+                pattern: mockPattern,
+                host: step.host,
+                status: step.statusCode ?? 200,
+                body: step.responseBody ?? "{}",
+                source: .recording(name: recording.name),
+                isEnabled: true
+            )
+
+            // Add to scenario if one is selected, otherwise loose
+            if case .scenario(let project, let scenario) = selection {
+                if var scenarioData = projectManager.loadScenario(project: project, scenario: scenario) {
+                    scenarioData.mocks.append(mock)
+                    try? projectManager.saveScenario(scenarioData, project: project)
+                }
+            } else {
+                MockEngine.shared.addLooseMock(mock)
             }
         }
     }

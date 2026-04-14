@@ -64,6 +64,9 @@ public final class Recorder {
     private var pendingRequests: [Int: (start: Date, method: String, url: String, host: String, headers: [CodableHeader], body: String?)] = [:]
     private let queue = DispatchQueue(label: "dev.pry.recorder")
 
+    /// Domains to filter during recording. Empty = record all traffic.
+    private var filterDomains: [String] = []
+
     private init() {}
 
     /// Whether recording is currently active.
@@ -71,11 +74,12 @@ public final class Recorder {
         queue.sync { currentRecording != nil && currentRecording?.stoppedAt == nil }
     }
 
-    /// Start a new recording.
-    public func start(name: String) {
+    /// Start a new recording, optionally filtering by domains.
+    public func start(name: String, domains: [String] = []) {
         queue.sync {
             currentRecording = Recording(name: name)
             pendingRequests = [:]
+            filterDomains = domains.map { $0.lowercased() }
         }
     }
 
@@ -98,6 +102,14 @@ public final class Recorder {
                                   headers: [(String, String)], body: String?) {
         queue.sync {
             guard currentRecording != nil else { return }
+            // Filter by domains if configured
+            if !filterDomains.isEmpty {
+                let h = host.lowercased()
+                let matches = filterDomains.contains { d in
+                    h == d || h.hasSuffix(".\(d)")
+                }
+                guard matches else { return }
+            }
             pendingRequests[requestId] = (
                 start: Date(),
                 method: method,
@@ -176,13 +188,29 @@ public final class Recorder {
         try? FileManager.default.removeItem(atPath: recordingsDir)
     }
 
-    /// Convert a recording to loose mocks (writes to /tmp/pry.mocks).
+    /// Convert a recording to loose mocks via MockEngine.
     public static func toMocks(name: String) -> Int {
         guard let recording = load(name: name) else { return 0 }
         var count = 0
         for step in recording.steps {
             if let body = step.responseBody {
-                Config.saveMock(path: step.url, response: body)
+                // Extract path from URL (head.uri can be full URL for HTTP)
+                var pattern = step.url
+                if pattern.hasPrefix("http://") || pattern.hasPrefix("https://") {
+                    if let url = URL(string: pattern) {
+                        pattern = url.path.isEmpty ? "/" : url.path
+                    }
+                }
+                let mock = UnifiedMock(
+                    method: step.method,
+                    pattern: pattern,
+                    host: step.host,
+                    status: step.statusCode ?? 200,
+                    body: body,
+                    source: .recording(name: name),
+                    isEnabled: true
+                )
+                MockEngine.shared.addLooseMock(mock)
                 count += 1
             }
         }
