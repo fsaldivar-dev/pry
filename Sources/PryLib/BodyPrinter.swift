@@ -77,8 +77,8 @@ public struct BodyPrinter {
         }
     }
 
-    public static func storeResponse(requestId: Int, statusCode: UInt, headers: [(String, String)], body: String?, isMock: Bool = false) {
-        RequestStore.shared.updateResponse(id: requestId, statusCode: statusCode, headers: headers, body: body, isMock: isMock)
+    public static func storeResponse(requestId: Int, statusCode: UInt, headers: [(String, String)], body: String?, isMock: Bool = false, mockSource: String? = nil) {
+        RequestStore.shared.updateResponse(id: requestId, statusCode: statusCode, headers: headers, body: body, isMock: isMock, mockSource: mockSource)
     }
 
     public static func storeTunnel(host: String) {
