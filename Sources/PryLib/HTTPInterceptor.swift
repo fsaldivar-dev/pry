@@ -63,6 +63,22 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         BodyPrinter.printRequestBody(body, requestId: requestId)
         Config.appendLog(logEntry)
 
+        // Recorder hook — capture request when recording is active
+        if Recorder.shared.isRecording {
+            var bodyString: String?
+            if var buf = body, buf.readableBytes > 0 {
+                bodyString = buf.readString(length: buf.readableBytes)
+            }
+            Recorder.shared.noteRequestStart(
+                requestId: requestId,
+                method: "\(head.method)",
+                url: head.uri,
+                host: host,
+                headers: head.headers.map { ($0.name, $0.value) },
+                body: bodyString
+            )
+        }
+
         // Breakpoint check
         if BreakpointStore.shared.shouldBreak(url: head.uri, host: host) {
             RequestStore.shared.updateResponse(id: requestId, statusCode: 0, headers: [], body: "⏸️ Paused at breakpoint")
@@ -89,6 +105,41 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
                     context.close(promise: nil)
                 }
             }
+            return
+        }
+
+        // Status code override — quick error simulation
+        if let overrideStatus = StatusOverrideStore.match(url: path, host: host) {
+            let statusText: String
+            switch overrideStatus {
+            case 200: statusText = "OK"
+            case 400: statusText = "Bad Request"
+            case 401: statusText = "Unauthorized"
+            case 403: statusText = "Forbidden"
+            case 404: statusText = "Not Found"
+            case 429: statusText = "Too Many Requests"
+            case 500: statusText = "Internal Server Error"
+            case 502: statusText = "Bad Gateway"
+            case 503: statusText = "Service Unavailable"
+            default: statusText = "Override"
+            }
+            let body = "{\"error\":\"\(statusText)\",\"status\":\(overrideStatus),\"pry\":\"status-override\"}"
+            OutputBroker.shared.log("⚡ Override \(overrideStatus) → \(host)\(path)", type: .mock)
+            BodyPrinter.storeResponse(requestId: requestId, statusCode: UInt(overrideStatus), headers: [("Content-Type", "application/json"), ("X-Pry-Override", "true")], body: body, isMock: true)
+            Config.appendLog("OVERRIDE \(path) -> \(overrideStatus) \(statusText)")
+
+            var headers = HTTPHeaders()
+            headers.add(name: "Content-Type", value: "application/json")
+            headers.add(name: "X-Pry-Override", value: "true")
+
+            let responseHead = HTTPResponseHead(version: .http1_1, status: HTTPResponseStatus(statusCode: Int(overrideStatus)), headers: headers)
+            context.write(wrapOutboundOut(.head(responseHead)), promise: nil)
+
+            var buffer = context.channel.allocator.buffer(capacity: body.utf8.count)
+            buffer.writeString(body)
+            context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+
+            context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
             return
         }
 
@@ -297,6 +348,16 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
             var buf = body
             let bodyStr = buf.readString(length: buf.readableBytes)
             BodyPrinter.storeResponse(requestId: requestId, statusCode: statusCode, headers: [], body: bodyStr)
+
+            // Recorder hook — capture response when recording is active
+            if Recorder.shared.isRecording {
+                Recorder.shared.noteResponseComplete(
+                    requestId: requestId,
+                    statusCode: statusCode,
+                    headers: head.headers.map { ($0.name, $0.value) },
+                    body: bodyStr
+                )
+            }
         }
 
         clientChannel.write(NIOAny(HTTPServerResponsePart.head(head)), promise: nil)

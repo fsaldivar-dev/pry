@@ -1,5 +1,6 @@
 import Foundation
 import PryLib
+import NIO
 #if canImport(Glibc)
 import Glibc
 #else
@@ -58,6 +59,40 @@ func printUsage() {
       pry rules load FILE        Load .pryrules scripting file
       pry rules                  List active rules
       pry rules clear            Clear all rules
+
+    Scenarios:
+      pry scenario use NAME       Activate a scenario
+      pry scenario off            Deactivate current scenario
+      pry scenario list           List all scenarios
+      pry scenario create NAME    Create empty scenario
+      pry scenario delete NAME    Delete scenario
+      pry scenario show NAME      Show scenario JSON
+      pry scenario capture NAME   Capture current config as scenario
+
+    Status Override:
+      pry override PATTERN CODE   Override response status code
+      pry overrides [clear]       List/clear status overrides
+
+    Mock Project:
+      pry project init            Initialize .pry/mocking/ directory
+      pry project list            List project mocks
+      pry project apply           Apply project mocks to proxy
+      pry project clear           Clear all project mocks
+
+    Recorder:
+      pry record start NAME       Start recording traffic
+      pry record stop             Stop and save recording
+      pry record list             List recordings
+      pry record show NAME        Show recording details
+      pry record delete NAME      Delete recording
+      pry record to-mocks NAME    Convert recording to mocks
+
+    Sharing:
+      pry export scenario NAME    Export scenario to .pryscenario
+      pry import scenario FILE    Import scenario from file
+
+    Devices:
+      pry device                  Start device setup server
 
     Examples:
       pry start
@@ -247,6 +282,50 @@ case "start":
                     } catch {
                         OutputBroker.shared.log(errText("Export failed: \(error)"), type: .error)
                     }
+                }
+            case "scenario":
+                if tuiArgs.count >= 3 && tuiArgs[1] == "use" {
+                    if ScenarioManager.activate(name: tuiArgs[2]) {
+                        OutputBroker.shared.log(info("🐱 Scenario activated: \(tuiArgs[2])"), type: .info)
+                    } else {
+                        OutputBroker.shared.log(errText("Scenario '\(tuiArgs[2])' not found"), type: .error)
+                    }
+                } else if tuiArgs.count >= 2 && tuiArgs[1] == "off" {
+                    ScenarioManager.deactivate()
+                    OutputBroker.shared.log(info("🐱 Scenario deactivated"), type: .info)
+                } else if tuiArgs.count >= 2 && tuiArgs[1] == "list" {
+                    let scenarios = ScenarioManager.list()
+                    let active = ScenarioManager.active()
+                    if scenarios.isEmpty {
+                        OutputBroker.shared.log("No scenarios", type: .info)
+                    } else {
+                        for name in scenarios {
+                            let marker = (name == active) ? " (active)" : ""
+                            OutputBroker.shared.log("  \(name)\(marker)", type: .info)
+                        }
+                    }
+                } else {
+                    OutputBroker.shared.log(errText("Usage: scenario <use NAME|off|list>"), type: .error)
+                }
+            case "override":
+                if tuiArgs.count >= 3, let status = UInt(tuiArgs[2]) {
+                    StatusOverrideStore.save(pattern: tuiArgs[1], status: status)
+                    OutputBroker.shared.log(info("🐱 Override: \(tuiArgs[1]) → \(status)"), type: .info)
+                } else {
+                    OutputBroker.shared.log(errText("Usage: override PATTERN STATUS_CODE"), type: .error)
+                }
+            case "record":
+                if tuiArgs.count >= 3 && tuiArgs[1] == "start" {
+                    Recorder.shared.start(name: tuiArgs[2])
+                    OutputBroker.shared.log(info("🐱 Recording started: \(tuiArgs[2])"), type: .info)
+                } else if tuiArgs.count >= 2 && tuiArgs[1] == "stop" {
+                    if let recording = Recorder.shared.stop() {
+                        OutputBroker.shared.log(info("🐱 Recording stopped: \(recording.name) (\(recording.steps.count) steps)"), type: .info)
+                    } else {
+                        OutputBroker.shared.log("No active recording", type: .info)
+                    }
+                } else {
+                    OutputBroker.shared.log(errText("Usage: record <start NAME|stop>"), type: .error)
                 }
             default:
                 OutputBroker.shared.log(errText("Unknown command: \(cmd)"), type: .error)
@@ -606,16 +685,37 @@ case "headers":
     }
 
 case "export":
-    guard args.count >= 3 && args[1] == "har" else {
+    if args.count >= 2 && args[1] == "scenario" {
+        guard args.count >= 3 else {
+            print("Usage: pry export scenario NAME [--output FILE]")
+            exit(1)
+        }
+        let name = args[2]
+        let outputPath: String
+        if let outputIdx = args.firstIndex(of: "--output"), outputIdx + 1 < args.count {
+            outputPath = args[outputIdx + 1]
+        } else {
+            outputPath = "\(name).pryscenario"
+        }
+        do {
+            try ScenarioExporter.export(name: name, to: outputPath)
+            print("🐱 Scenario exported to: \(outputPath)")
+        } catch {
+            print("Error: \(error)")
+            exit(1)
+        }
+    } else if args.count >= 3 && args[1] == "har" {
+        let filePath = args[2]
+        do {
+            try HARExporter.exportToFile(from: RequestStore.shared, path: filePath)
+            print("🐱 Exported HAR to \(filePath)")
+        } catch {
+            print("Error: \(error)")
+            exit(1)
+        }
+    } else {
         print("Usage: pry export har output.har")
-        exit(1)
-    }
-    let filePath = args[2]
-    do {
-        try HARExporter.exportToFile(from: RequestStore.shared, path: filePath)
-        print("🐱 Exported HAR to \(filePath)")
-    } catch {
-        print("Error: \(error)")
+        print("       pry export scenario NAME [--output FILE]")
         exit(1)
     }
 
@@ -848,6 +948,229 @@ case "rules":
                 }
             }
         }
+    }
+
+case "scenario":
+    guard args.count >= 2 else {
+        print("Usage: pry scenario <use|off|list|create|delete|show|capture> [NAME]")
+        exit(1)
+    }
+    switch args[1] {
+    case "use":
+        guard args.count >= 3 else { print("Usage: pry scenario use NAME"); exit(1) }
+        let name = args[2]
+        if ScenarioManager.activate(name: name) {
+            print("🐱 Scenario activated: \(name)")
+        } else {
+            print("Error: scenario '\(name)' not found")
+            exit(1)
+        }
+    case "off":
+        ScenarioManager.deactivate()
+        print("🐱 Scenario deactivated")
+    case "list":
+        let scenarios = ScenarioManager.list()
+        let active = ScenarioManager.active()
+        if scenarios.isEmpty {
+            print("No scenarios. Create one with: pry scenario create NAME")
+        } else {
+            for name in scenarios {
+                let marker = (name == active) ? " (active)" : ""
+                print("  \(name)\(marker)")
+            }
+        }
+    case "create":
+        guard args.count >= 3 else { print("Usage: pry scenario create NAME"); exit(1) }
+        do {
+            try ScenarioManager.create(name: args[2])
+            print("🐱 Scenario created: \(args[2])")
+        } catch {
+            print("Error: \(error)")
+            exit(1)
+        }
+    case "delete":
+        guard args.count >= 3 else { print("Usage: pry scenario delete NAME"); exit(1) }
+        ScenarioManager.delete(name: args[2])
+        print("🐱 Scenario deleted: \(args[2])")
+    case "show":
+        guard args.count >= 3 else { print("Usage: pry scenario show NAME"); exit(1) }
+        guard let scenario = ScenarioManager.load(name: args[2]) else {
+            print("Error: scenario '\(args[2])' not found")
+            exit(1)
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        if let data = try? encoder.encode(scenario), let json = String(data: data, encoding: .utf8) {
+            print(json)
+        }
+    case "capture":
+        guard args.count >= 3 else { print("Usage: pry scenario capture NAME"); exit(1) }
+        do {
+            try ScenarioManager.capture(name: args[2])
+            print("🐱 Current config captured as scenario: \(args[2])")
+        } catch {
+            print("Error: \(error)")
+            exit(1)
+        }
+    default:
+        print("Unknown scenario command: \(args[1])")
+        print("Usage: pry scenario <use|off|list|create|delete|show|capture> [NAME]")
+        exit(1)
+    }
+
+case "override":
+    guard args.count >= 3, let status = UInt(args[2]) else {
+        print("Usage: pry override PATTERN STATUS_CODE")
+        print("Example: pry override /api/login 401")
+        exit(1)
+    }
+    StatusOverrideStore.save(pattern: args[1], status: status)
+    print("🐱 Override: \(args[1]) → \(status)")
+
+case "overrides":
+    if args.count >= 2 && args[1] == "clear" {
+        StatusOverrideStore.clear()
+        print("🐱 All overrides cleared")
+    } else {
+        let overrides = StatusOverrideStore.loadAll()
+        if overrides.isEmpty {
+            print("No status overrides. Add one with: pry override /api/path 500")
+        } else {
+            for o in overrides {
+                print("  \(o.pattern) → \(o.status)")
+            }
+        }
+    }
+
+case "project":
+    guard args.count >= 2 else {
+        print("Usage: pry project <init|list|apply|clear>")
+        exit(1)
+    }
+    switch args[1] {
+    case "init":
+        do {
+            try MockProject.initProject()
+            print("🐱 Mock project initialized at .pry/mocking/")
+        } catch {
+            print("Error: \(error)")
+            exit(1)
+        }
+    case "list":
+        let mocks = MockProject.loadAll()
+        if mocks.isEmpty {
+            print("No project mocks. Init with: pry project init")
+        } else {
+            for m in mocks {
+                let method = m.method ?? "*"
+                print("  [\(method)] \(m.pattern) → \(m.status) (\(m.id))")
+            }
+        }
+    case "apply":
+        MockProject.applyAll()
+        let count = MockProject.count()
+        print("🐱 Applied \(count) project mock(s)")
+    case "clear":
+        MockProject.clear()
+        print("🐱 Mock project cleared")
+    default:
+        print("Unknown project command: \(args[1])")
+        exit(1)
+    }
+
+case "record":
+    guard args.count >= 2 else {
+        print("Usage: pry record <start|stop|list|show|delete|to-mocks> [NAME]")
+        exit(1)
+    }
+    switch args[1] {
+    case "start":
+        guard args.count >= 3 else { print("Usage: pry record start NAME"); exit(1) }
+        Recorder.shared.start(name: args[2])
+        print("🐱 Recording started: \(args[2])")
+    case "stop":
+        if let recording = Recorder.shared.stop() {
+            print("🐱 Recording stopped: \(recording.name) (\(recording.steps.count) steps)")
+        } else {
+            print("No active recording")
+        }
+    case "list":
+        let recordings = Recorder.list()
+        if recordings.isEmpty {
+            print("No recordings. Start one with: pry record start NAME")
+        } else {
+            for name in recordings {
+                if let r = Recorder.load(name: name) {
+                    print("  \(name) — \(r.steps.count) steps")
+                }
+            }
+        }
+    case "show":
+        guard args.count >= 3 else { print("Usage: pry record show NAME"); exit(1) }
+        guard let recording = Recorder.load(name: args[2]) else {
+            print("Error: recording '\(args[2])' not found")
+            exit(1)
+        }
+        print("Recording: \(recording.name)")
+        print("Steps: \(recording.steps.count)")
+        for step in recording.steps {
+            let status = step.statusCode.map { "\($0)" } ?? "?"
+            print("  \(step.sequence). \(step.method) \(step.url) → \(status) (\(step.latencyMs)ms)")
+        }
+    case "delete":
+        guard args.count >= 3 else { print("Usage: pry record delete NAME"); exit(1) }
+        Recorder.delete(name: args[2])
+        print("🐱 Recording deleted: \(args[2])")
+    case "to-mocks":
+        guard args.count >= 3 else { print("Usage: pry record to-mocks NAME"); exit(1) }
+        let count = Recorder.toMocks(name: args[2])
+        if count > 0 {
+            print("🐱 Converted \(count) steps to mocks")
+        } else {
+            print("No steps to convert (recording not found or empty)")
+        }
+    default:
+        print("Unknown record command: \(args[1])")
+        exit(1)
+    }
+
+case "import":
+    guard args.count >= 3 && args[1] == "scenario" else {
+        print("Usage: pry import scenario FILE")
+        exit(1)
+    }
+    do {
+        let name = try ScenarioExporter.importScenario(from: args[2])
+        print("🐱 Scenario imported: \(name)")
+    } catch {
+        print("Error: \(error)")
+        exit(1)
+    }
+
+case "device":
+    let ips = DeviceOnboarding.localIPAddresses()
+    if ips.isEmpty {
+        print("Error: no local network IP detected. Are you connected to Wi-Fi?")
+        exit(1)
+    }
+    let ip = ips[0]
+    let proxyPort = Config.port()
+    print("🐱 Device Setup")
+    print("   Proxy: \(ip):\(proxyPort)")
+    print("   Setup page: http://\(ip):8081")
+    print("")
+    print("   Open http://\(ip):8081 on your device to configure it.")
+    print("   Press Ctrl+C to stop the setup server.")
+    print("")
+    // Start onboarding server (blocking)
+    let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+    defer { try? group.syncShutdownGracefully() }
+    do {
+        let channel = try DeviceOnboarding.startServer(port: 8081, proxyPort: proxyPort, group: group)
+        try channel.closeFuture.wait()
+    } catch {
+        print("Error starting setup server: \(error)")
+        exit(1)
     }
 
 case "help", "--help", "-h":

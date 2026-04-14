@@ -12,6 +12,10 @@ struct PryApp: App {
     @State private var requestStore = RequestStoreWrapper()
     @State private var mockManager = MockManager()
     @State private var breakpointManager = BreakpointUIManager()
+    @State private var scenarioManager = ScenarioUIManager()
+    @State private var overrideManager = StatusOverrideUIManager()
+    @State private var mockProjectManager = MockProjectUIManager()
+    @State private var recorderManager = RecorderUIManager()
 
     var body: some Scene {
         WindowGroup {
@@ -20,6 +24,10 @@ struct PryApp: App {
                 .environment(requestStore)
                 .environment(mockManager)
                 .environment(breakpointManager)
+                .environment(scenarioManager)
+                .environment(overrideManager)
+                .environment(mockProjectManager)
+                .environment(recorderManager)
         }
         .defaultSize(width: 1200, height: 800)
 
