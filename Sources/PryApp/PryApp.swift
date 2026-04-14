@@ -27,7 +27,7 @@ struct PryApp: App {
                 .environment(proxyManager)
         }
 
-        MenuBarExtra("Pry", systemImage: "cat.fill") {
+        MenuBarExtra("Pry", systemImage: "cat") {
             PryMenuBarContent()
                 .environment(proxyManager)
                 .environment(requestStore)
