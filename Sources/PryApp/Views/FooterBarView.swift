@@ -1,11 +1,13 @@
 import SwiftUI
 import PryKit
+import PryLib
 
 @available(macOS 14, *)
 struct FooterBarView: View {
     @Environment(ProxyManager.self) private var proxy
     @Environment(RequestStoreWrapper.self) private var store
     @Environment(MockManager.self) private var mocks
+    @Environment(ScenarioUIManager.self) private var scenarios
 
     var body: some View {
         HStack(spacing: 0) {
@@ -31,6 +33,17 @@ struct FooterBarView: View {
                     }
                 }
 
+                // Active scenario
+                if let active = scenarios.activeScenario {
+                    HStack(spacing: 4) {
+                        Image(systemName: "film.stack")
+                            .font(.system(size: 8))
+                        Text(active.uppercased())
+                            .tracking(1.5)
+                    }
+                    .foregroundStyle(PryTheme.success)
+                }
+
                 // Mocks
                 if mocks.mocks.count > 0 {
                     HStack(spacing: 4) {
@@ -39,6 +52,7 @@ struct FooterBarView: View {
                         Text("\(mocks.mocks.count) MOCKS")
                             .tracking(1.5)
                     }
+                    .foregroundStyle(.purple)
                 }
             }
 

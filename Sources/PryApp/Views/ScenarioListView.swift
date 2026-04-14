@@ -188,12 +188,17 @@ private struct ScenarioDetailView: View {
                     }
                     if !scenario.mocks.isEmpty {
                         sectionHeader("Mocks", count: scenario.mocks.count)
-                        ForEach(scenario.mocks, id: \.path) { mock in
+                        ForEach(scenario.mocks, id: \.id) { mock in
                             HStack {
+                                if let method = mock.method {
+                                    Text(method)
+                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(PryTheme.methodColor(method))
+                                }
                                 Text("\(mock.status)")
                                     .font(.caption)
                                     .foregroundStyle(PryTheme.statusColorSwiftUI(mock.status))
-                                Text(mock.path)
+                                Text(mock.pattern)
                                     .font(.system(size: 12, design: .monospaced))
                             }
                         }
@@ -215,13 +220,6 @@ private struct ScenarioDetailView: View {
                         sectionHeader("Blocklist", count: scenario.blocklist.count)
                         ForEach(scenario.blocklist, id: \.self) { domain in
                             Text(domain).font(.system(size: 12, design: .monospaced))
-                        }
-                    }
-                    if !scenario.statusOverrides.isEmpty {
-                        sectionHeader("Status Overrides", count: scenario.statusOverrides.count)
-                        ForEach(scenario.statusOverrides, id: \.pattern) { o in
-                            Text("\(o.pattern) -> \(o.status)")
-                                .font(.system(size: 12, design: .monospaced))
                         }
                     }
                 }

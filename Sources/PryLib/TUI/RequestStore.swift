@@ -19,7 +19,7 @@ public class RequestStore {
             case id, timestamp, method, url, host, appIcon, appName
             case requestHeaders, requestBody, statusCode
             case responseHeaders, responseBody
-            case isMock, isTunnel, isPinned, isWebSocket, graphqlOperation
+            case isMock, isTunnel, isPinned, isWebSocket, graphqlOperation, mockSource
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -41,6 +41,7 @@ public class RequestStore {
             try c.encode(isPinned, forKey: .isPinned)
             try c.encode(isWebSocket, forKey: .isWebSocket)
             try c.encodeIfPresent(graphqlOperation, forKey: .graphqlOperation)
+            try c.encodeIfPresent(mockSource, forKey: .mockSource)
         }
 
         public init(from decoder: Decoder) throws {
@@ -62,6 +63,7 @@ public class RequestStore {
             isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
             isWebSocket = try c.decodeIfPresent(Bool.self, forKey: .isWebSocket) ?? false
             graphqlOperation = try c.decodeIfPresent(String.self, forKey: .graphqlOperation)
+            mockSource = try c.decodeIfPresent(String.self, forKey: .mockSource)
         }
 
         public let id: Int
@@ -82,6 +84,7 @@ public class RequestStore {
         public var isWebSocket: Bool = false
         public var wsFrames: [WSFrame] = []
         public var graphqlOperation: String?
+        public var mockSource: String?
         /// Round-trip time from request received to response complete (nil until response arrives).
         public var duration: TimeInterval?
 
@@ -143,13 +146,14 @@ public class RequestStore {
         onChange?()
     }
 
-    func updateResponse(id: Int, statusCode: UInt, headers: [(String, String)], body: String?, isMock: Bool = false) {
+    func updateResponse(id: Int, statusCode: UInt, headers: [(String, String)], body: String?, isMock: Bool = false, mockSource: String? = nil) {
         queue.sync {
             if let idx = entries.firstIndex(where: { $0.id == id }) {
                 entries[idx].statusCode = statusCode
                 entries[idx].responseHeaders = headers
                 entries[idx].responseBody = body
                 entries[idx].isMock = isMock
+                entries[idx].mockSource = mockSource
                 entries[idx].duration = Date().timeIntervalSince(entries[idx].timestamp)
             }
         }

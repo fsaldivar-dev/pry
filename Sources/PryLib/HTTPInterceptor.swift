@@ -108,50 +108,16 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
             return
         }
 
-        // Status code override — quick error simulation
-        if let overrideStatus = StatusOverrideStore.match(url: path, host: host) {
-            let statusText: String
-            switch overrideStatus {
-            case 200: statusText = "OK"
-            case 400: statusText = "Bad Request"
-            case 401: statusText = "Unauthorized"
-            case 403: statusText = "Forbidden"
-            case 404: statusText = "Not Found"
-            case 429: statusText = "Too Many Requests"
-            case 500: statusText = "Internal Server Error"
-            case 502: statusText = "Bad Gateway"
-            case 503: statusText = "Service Unavailable"
-            default: statusText = "Override"
-            }
-            let body = "{\"error\":\"\(statusText)\",\"status\":\(overrideStatus),\"pry\":\"status-override\"}"
-            OutputBroker.shared.log("⚡ Override \(overrideStatus) → \(host)\(path)", type: .mock)
-            BodyPrinter.storeResponse(requestId: requestId, statusCode: UInt(overrideStatus), headers: [("Content-Type", "application/json"), ("X-Pry-Override", "true")], body: body, isMock: true)
-            Config.appendLog("OVERRIDE \(path) -> \(overrideStatus) \(statusText)")
-
-            var headers = HTTPHeaders()
-            headers.add(name: "Content-Type", value: "application/json")
-            headers.add(name: "X-Pry-Override", value: "true")
-
-            let responseHead = HTTPResponseHead(version: .http1_1, status: HTTPResponseStatus(statusCode: Int(overrideStatus)), headers: headers)
-            context.write(wrapOutboundOut(.head(responseHead)), promise: nil)
-
-            var buffer = context.channel.allocator.buffer(capacity: body.utf8.count)
-            buffer.writeString(body)
-            context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
-
-            context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
-            return
-        }
-
-        // Mock check
-        if let mockResponse = findMock(for: path, host: host) {
-            respondWithMock(context: context, json: mockResponse, path: path, requestId: requestId)
+        // Mock check (unified: covers status overrides + mocks)
+        if let mock = MockEngine.shared.findMock(path: path, host: host, method: "\(head.method)") {
+            respondWithUnifiedMock(context: context, mock: mock, path: path, host: host, requestId: requestId)
             return
         }
 
         // Map Local check (regex → local file)
         if let fileContent = MapLocal.matchContent(url: path) {
-            respondWithMock(context: context, json: fileContent, path: path, requestId: requestId)
+            let mapMock = UnifiedMock(pattern: path, body: fileContent, source: .loose)
+            respondWithUnifiedMock(context: context, mock: mapMock, path: path, host: host, requestId: requestId)
             return
         }
 
@@ -197,52 +163,56 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
     }
 
     private func continueAfterBreakpoint(context: ChannelHandlerContext, host: String, port: Int, path: String, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int) {
-        if let mockResponse = findMock(for: path, host: host) {
-            respondWithMock(context: context, json: mockResponse, path: path, requestId: requestId)
+        if let mock = MockEngine.shared.findMock(path: path, host: host, method: "\(head.method)") {
+            respondWithUnifiedMock(context: context, mock: mock, path: path, host: host, requestId: requestId)
             return
         }
         forwardRequest(context: context, host: host, port: port, head: head, body: body, requestId: requestId)
     }
 
-    private func findMock(for path: String, host: String) -> String? {
-        let mocks = Config.loadMocks()
-        for (mockKey, response) in mocks {
-            if mockKey.contains(":") {
-                // Domain-scoped mock: "domain.com:/path"
-                let parts = mockKey.split(separator: ":", maxSplits: 1)
-                let mockDomain = String(parts[0])
-                let mockPath = String(parts[1])
-                if host.contains(mockDomain) && path.hasPrefix(mockPath) {
-                    return response
-                }
-            } else {
-                // Simple path mock: "/api/login"
-                if path.hasPrefix(mockKey) {
-                    return response
+    private func respondWithUnifiedMock(context: ChannelHandlerContext, mock: UnifiedMock, path: String, host: String, requestId: Int) {
+        let sourceLabel = mock.source?.label ?? "loose"
+        let ct = mock.contentType ?? "application/json"
+
+        BodyPrinter.printMock(path: path, json: mock.body)
+        BodyPrinter.storeResponse(requestId: requestId, statusCode: mock.status,
+                                  headers: [(ct == "application/json" ? "Content-Type" : ct, ct), ("X-Pry-Mock", "true")],
+                                  body: mock.body, isMock: true, mockSource: sourceLabel)
+        Config.appendLog("MOCK \(path) -> \(mock.status) [\(sourceLabel)]")
+        OutputBroker.shared.log("🎭 Mock \(mock.status) → \(host)\(path) [\(sourceLabel)]", type: .mock)
+
+        let sendResponse = { [weak self] in
+            guard let self else { return }
+            var headers = HTTPHeaders()
+            headers.add(name: "Content-Type", value: ct)
+            headers.add(name: "X-Pry-Mock", value: "true")
+            // Add custom headers from mock
+            if let customHeaders = mock.headers {
+                for (name, value) in customHeaders {
+                    headers.add(name: name, value: value)
                 }
             }
+
+            let responseHead = HTTPResponseHead(version: .http1_1,
+                                                status: HTTPResponseStatus(statusCode: Int(mock.status)),
+                                                headers: headers)
+            context.write(self.wrapOutboundOut(.head(responseHead)), promise: nil)
+
+            var buffer = context.channel.allocator.buffer(capacity: mock.body.utf8.count)
+            buffer.writeString(mock.body)
+            context.write(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+
+            context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
         }
-        return nil
-    }
 
-    private func respondWithMock(context: ChannelHandlerContext, json: String, path: String, requestId: Int) {
-        BodyPrinter.printMock(path: path, json: json)
-        BodyPrinter.storeResponse(requestId: requestId, statusCode: 200, headers: [("Content-Type", "application/json")], body: json, isMock: true)
-        Config.appendLog("MOCK \(path) -> 200 OK")
-
-        var headers = HTTPHeaders()
-        headers.add(name: "Content-Type", value: "application/json")
-        headers.add(name: "X-Pry-Mock", value: "true")
-
-        let responseHead = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
-        context.write(wrapOutboundOut(.head(responseHead)), promise: nil)
-
-        var buffer = context.channel.allocator.buffer(capacity: json.utf8.count)
-        buffer.writeString(json)
-        context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
-
-        context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
-        // Don't close client channel — allow next request on same connection
+        // Delay support
+        if let delay = mock.delay, delay > 0 {
+            context.eventLoop.scheduleTask(in: .milliseconds(Int64(delay))) {
+                sendResponse()
+            }
+        } else {
+            sendResponse()
+        }
     }
 
     private func forwardRequest(context: ChannelHandlerContext, host: String, port: Int, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int = 0, connectHost: String? = nil) {

@@ -2,18 +2,6 @@ import Foundation
 
 // MARK: - Scenario Data Model
 
-/// Entry types for scenario configuration
-public struct MockEntry: Codable, Equatable {
-    public let path: String
-    public let method: String?
-    public let status: UInt
-    public let body: String
-
-    public init(path: String, method: String? = nil, status: UInt = 200, body: String) {
-        self.path = path; self.method = method; self.status = status; self.body = body
-    }
-}
-
 public struct HeaderEntry: Codable, Equatable {
     public let action: String  // "add" or "remove"
     public let name: String
@@ -51,27 +39,17 @@ public struct DNSEntry: Codable, Equatable {
     }
 }
 
-public struct StatusOverrideEntry: Codable, Equatable {
-    public let pattern: String
-    public let status: UInt
-
-    public init(pattern: String, status: UInt) {
-        self.pattern = pattern; self.status = status
-    }
-}
-
 /// A Scenario bundles all proxy configuration into a single activatable unit.
 public struct Scenario: Codable, Equatable {
     public var name: String
     public var watchlist: [String]
-    public var mocks: [MockEntry]
+    public var mocks: [UnifiedMock]
     public var headers: [HeaderEntry]
     public var mapLocal: [MapLocalEntry]
     public var mapRemote: [MapRemoteEntry]
     public var dns: [DNSEntry]
     public var breakpoints: [String]
     public var blocklist: [String]
-    public var statusOverrides: [StatusOverrideEntry]
     public var rules: String
 
     public init(name: String) {
@@ -84,7 +62,6 @@ public struct Scenario: Codable, Equatable {
         self.dns = []
         self.breakpoints = []
         self.blocklist = []
-        self.statusOverrides = []
         self.rules = ""
     }
 }
@@ -159,10 +136,8 @@ public struct ScenarioManager {
             Watchlist.add(domain)
         }
 
-        // Apply mocks
-        for mock in scenario.mocks {
-            Config.saveMock(path: mock.path, response: mock.body)
-        }
+        // Apply mocks via MockEngine
+        MockEngine.shared.loadScenarioMocks(scenario.mocks)
 
         // Apply headers
         for header in scenario.headers {
@@ -198,11 +173,6 @@ public struct ScenarioManager {
             BlockList.add(domain)
         }
 
-        // Apply status overrides
-        for override in scenario.statusOverrides {
-            StatusOverrideStore.save(pattern: override.pattern, status: override.status)
-        }
-
         // Apply rules
         if !scenario.rules.isEmpty {
             let parsed = RuleEngine.parse(content: scenario.rules)
@@ -228,9 +198,8 @@ public struct ScenarioManager {
         // Capture watchlist
         scenario.watchlist = Watchlist.load().sorted()
 
-        // Capture mocks
-        let mocks = Config.loadMocks()
-        scenario.mocks = mocks.map { MockEntry(path: $0.key, body: $0.value) }
+        // Capture mocks from MockEngine
+        scenario.mocks = MockEngine.shared.activeMocks()
 
         // Capture headers — map HeaderRewrite.Action enum to string
         let headers = HeaderRewrite.loadAll()
@@ -260,16 +229,13 @@ public struct ScenarioManager {
         // Capture blocklist
         scenario.blocklist = BlockList.loadAll()
 
-        // Capture status overrides
-        let overrides = StatusOverrideStore.loadAll()
-        scenario.statusOverrides = overrides.map { StatusOverrideEntry(pattern: $0.pattern, status: $0.status) }
-
         try save(scenario)
     }
 
     // MARK: - Private
 
     private static func clearAllConfig() {
+        MockEngine.shared.clearAll()
         Config.clearMocks()
         HeaderRewrite.clear()
         MapLocal.clear()
@@ -277,7 +243,6 @@ public struct ScenarioManager {
         DNSSpoofing.clear()
         BreakpointStore.shared.clearAll()
         BlockList.clear()
-        StatusOverrideStore.clear()
         RuleEngine.clear()
         // Watchlist has no clear() — remove each domain individually
         let domains = Watchlist.load()

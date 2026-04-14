@@ -25,6 +25,22 @@ public struct ProjectMock: Codable, Equatable {
         self.delay = delay
         self.notes = notes
     }
+
+    /// Convert to UnifiedMock for use with MockEngine.
+    public func toUnifiedMock() -> UnifiedMock {
+        UnifiedMock(
+            id: id,
+            method: method,
+            pattern: pattern,
+            status: status,
+            headers: headers,
+            body: body,
+            delay: delay,
+            notes: notes,
+            source: .loose,
+            isEnabled: true
+        )
+    }
 }
 
 /// Manages organized mock files in .pry/mocking/ directory.
@@ -79,12 +95,12 @@ public struct MockProject {
         try? FileManager.default.removeItem(atPath: mockingDir)
     }
 
-    /// Apply all project mocks to the active proxy config (/tmp/pry.mocks).
+    /// Apply all project mocks to MockEngine as loose mocks.
     /// Does NOT clear existing loose mocks — project mocks are additive.
     public static func applyAll() {
         let mocks = loadAll()
         for mock in mocks {
-            Config.saveMock(path: mock.pattern, response: mock.body)
+            MockEngine.shared.addLooseMock(mock.toUnifiedMock())
         }
     }
 

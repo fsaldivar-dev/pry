@@ -18,6 +18,10 @@ private struct AppIcon {
 @MainActor
 struct SidebarView: View {
     @Environment(RequestStoreWrapper.self) private var store
+    @Environment(MockManager.self) private var mocks
+    @Environment(BreakpointUIManager.self) private var breakpoints
+    @Environment(ScenarioUIManager.self) private var scenarios
+    @Environment(StatusOverrideUIManager.self) private var overrides
     @State private var grouped: [AppGroup] = []
     @State private var hoveredCard: String?
 
@@ -46,6 +50,9 @@ struct SidebarView: View {
 
                 // MARK: Security card
                 securityCard
+
+                // MARK: Active configuration
+                activeConfigSection
             }
             .padding(.horizontal, 12)
             .padding(.top, 16)
@@ -237,6 +244,72 @@ struct SidebarView: View {
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(SColor.indigo.opacity(0.25), lineWidth: 1)
         )
+    }
+
+    // MARK: - Active Configuration
+
+    @ViewBuilder
+    private var activeConfigSection: some View {
+        let mockCount = mocks.mocks.count
+        let bpCount = breakpoints.patterns.count
+        let overrideCount = overrides.overrides.count
+        let hasAnyConfig = scenarios.activeScenario != nil || mockCount > 0 || bpCount > 0 || overrideCount > 0
+
+        if hasAnyConfig {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("CONFIGURACION ACTIVA")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(PryTheme.textTertiary)
+                    .tracking(1.5)
+                    .padding(.horizontal, 12)
+
+                if let activeLabel = scenarios.activeScenario {
+                    HStack(spacing: 6) {
+                        Image(systemName: "film.stack")
+                            .foregroundStyle(PryTheme.success)
+                            .font(.caption)
+                        Text(activeLabel)
+                            .font(.system(size: 11))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 12)
+                }
+
+                if mockCount > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "theatermask.and.paintbrush")
+                            .foregroundStyle(SColor.purple)
+                            .font(.caption)
+                        Text("\(mockCount) Mocks activos")
+                            .font(.system(size: 11))
+                    }
+                    .padding(.horizontal, 12)
+                }
+
+                if bpCount > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "pause.circle")
+                            .foregroundStyle(.orange)
+                            .font(.caption)
+                        Text("\(bpCount) Breakpoints")
+                            .font(.system(size: 11))
+                    }
+                    .padding(.horizontal, 12)
+                }
+
+                if overrideCount > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundStyle(PryTheme.warning)
+                            .font(.caption)
+                        Text("\(overrideCount) Overrides")
+                            .font(.system(size: 11))
+                    }
+                    .padding(.horizontal, 12)
+                }
+            }
+            .padding(.vertical, 8)
+        }
     }
 
     // MARK: - Reusable Components

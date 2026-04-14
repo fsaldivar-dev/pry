@@ -16,6 +16,7 @@ struct PryApp: App {
     @State private var overrideManager = StatusOverrideUIManager()
     @State private var mockProjectManager = MockProjectUIManager()
     @State private var recorderManager = RecorderUIManager()
+    @State private var projectUIManager = ProjectUIManager()
 
     var body: some Scene {
         WindowGroup {
@@ -28,6 +29,7 @@ struct PryApp: App {
                 .environment(overrideManager)
                 .environment(mockProjectManager)
                 .environment(recorderManager)
+                .environment(projectUIManager)
         }
         .defaultSize(width: 1200, height: 800)
 

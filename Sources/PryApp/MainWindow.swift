@@ -8,13 +8,10 @@ struct MainWindow: View {
     @Environment(ProxyManager.self) private var proxy
     @Environment(RequestStoreWrapper.self) private var store
     @Environment(BreakpointUIManager.self) private var breakpoints
-    @State private var showMocks = false
+    @Environment(RecorderUIManager.self) private var recorderManager
+    @State private var showMocking = false
     @State private var showBreakpoints = false
     @State private var showRules = false
-    @State private var showScenarios = false
-    @State private var showOverrides = false
-    @State private var showMockProject = false
-    @State private var showRecorder = false
     @State private var sidebarWidth: CGFloat = 220
     @State private var detailHeight: CGFloat = 280
     @State private var showSidebar = true
@@ -23,6 +20,10 @@ struct MainWindow: View {
         VStack(spacing: 0) {
             if let paused = breakpoints.pausedRequests.first {
                 PausedRequestBanner(method: paused.method, url: paused.url)
+            }
+
+            if recorderManager.isRecording {
+                RecorderBannerView()
             }
 
             if store.requests.isEmpty {
@@ -103,9 +104,9 @@ struct MainWindow: View {
                 .help("Clear all captured requests")
             }
             ToolbarItem(placement: .automatic) {
-                Button { showMocks.toggle() } label: {
+                Button { showMocking.toggle() } label: {
                     Image(systemName: "theatermask.and.paintbrush")
-                    Text("Mocks")
+                    Text("Mocking")
                 }
             }
             ToolbarItem(placement: .automatic) {
@@ -120,51 +121,15 @@ struct MainWindow: View {
                     Text("Rules")
                 }
             }
-            ToolbarItem(placement: .automatic) {
-                Button { showScenarios.toggle() } label: {
-                    Image(systemName: "film.stack")
-                    Text("Scenarios")
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                Button { showOverrides.toggle() } label: {
-                    Image(systemName: "exclamationmark.triangle")
-                    Text("Overrides")
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                Button { showMockProject.toggle() } label: {
-                    Image(systemName: "folder")
-                    Text("Project")
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                Button { showRecorder.toggle() } label: {
-                    Image(systemName: "record.circle")
-                    Text("Record")
-                }
-            }
         }
-        .sheet(isPresented: $showMocks) {
-            MockListView().frame(minWidth: 500, minHeight: 400)
+        .sheet(isPresented: $showMocking) {
+            UnifiedMockView().frame(minWidth: 800, minHeight: 500)
         }
         .sheet(isPresented: $showBreakpoints) {
             BreakpointListView().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showRules) {
             RulesEditorView().frame(minWidth: 600, minHeight: 500)
-        }
-        .sheet(isPresented: $showScenarios) {
-            ScenarioListView().frame(minWidth: 500, minHeight: 400)
-        }
-        .sheet(isPresented: $showOverrides) {
-            StatusOverrideListView().frame(minWidth: 500, minHeight: 400)
-        }
-        .sheet(isPresented: $showMockProject) {
-            MockProjectView().frame(minWidth: 500, minHeight: 400)
-        }
-        .sheet(isPresented: $showRecorder) {
-            RecorderView().frame(minWidth: 500, minHeight: 400)
         }
     }
 

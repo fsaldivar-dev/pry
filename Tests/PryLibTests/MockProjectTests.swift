@@ -5,11 +5,13 @@ final class MockProjectTests: XCTestCase {
     override func setUp() {
         super.setUp()
         MockProject.clear()
+        MockEngine.shared.clearAll()
         Config.clearMocks()
     }
 
     override func tearDown() {
         MockProject.clear()
+        MockEngine.shared.clearAll()
         Config.clearMocks()
         super.tearDown()
     }
@@ -58,9 +60,10 @@ final class MockProjectTests: XCTestCase {
         try MockProject.save(ProjectMock(pattern: "/api/users", body: "{\"users\":[]}"))
         try MockProject.save(ProjectMock(pattern: "/api/login", body: "{\"token\":\"x\"}"))
         MockProject.applyAll()
-        let mocks = Config.loadMocks()
-        XCTAssertEqual(mocks["/api/users"], "{\"users\":[]}")
-        XCTAssertEqual(mocks["/api/login"], "{\"token\":\"x\"}")
+        let mocks = MockEngine.shared.looseMockList()
+        XCTAssertEqual(mocks.count, 2)
+        XCTAssertTrue(mocks.contains(where: { $0.pattern == "/api/users" }))
+        XCTAssertTrue(mocks.contains(where: { $0.pattern == "/api/login" }))
     }
 
     func testCount() throws {
