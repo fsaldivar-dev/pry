@@ -96,6 +96,42 @@ struct UnifiedMockView: View {
 
     // MARK: - Navigation Sidebar
 
+    // MARK: - Export / Import
+
+    private func exportScenario(project: String, scenario: String) {
+        guard let scenarioData = projectManager.loadScenario(project: project, scenario: scenario) else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(scenario).pryscenario"
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let exported = ExportedScenario(scenario: scenarioData)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(exported) {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    private func importScenario(project: String) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.message = "Select a .pryscenario file to import"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = try? Data(contentsOf: url),
+              let exported = try? decoder.decode(ExportedScenario.self, from: data) else { return }
+        var scenario = exported.scenario
+        // Handle name conflicts
+        let existing = Set(projectManager.listScenarios(project: project))
+        if existing.contains(scenario.name) {
+            scenario.name = scenario.name + "-imported"
+        }
+        try? projectManager.saveScenario(scenario, project: project)
+        projectManager.reload()
+    }
+
     private var navigationSidebar: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
@@ -301,6 +337,15 @@ struct UnifiedMockView: View {
                 .controlSize(.small)
 
                 Button {
+                    importScenario(project: project)
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                    Text("Import")
+                }
+                .controlSize(.small)
+                .help("Import .pryscenario file")
+
+                Button {
                     projectManager.deleteProject(name: project)
                     selection = .looseMocks
                 } label: {
@@ -440,6 +485,14 @@ struct UnifiedMockView: View {
                 }
                 .controlSize(.small)
                 .tint(recorder.isRecording ? .red : nil)
+
+                Button {
+                    exportScenario(project: project, scenario: scenario)
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .controlSize(.small)
+                .help("Export Scenario")
 
                 Button {
                     projectManager.deleteScenario(project: project, scenario: scenario)
