@@ -486,7 +486,7 @@ struct UnifiedMockView: View {
 // MARK: - Reusable Mock Row
 
 @available(macOS 14, *)
-private struct UnifiedMockRow: View {
+@MainActor private struct UnifiedMockRow: View {
     let mock: UnifiedMock
     let onDelete: () -> Void
     @State private var showDeleteConfirmation = false
@@ -565,7 +565,7 @@ private struct UnifiedMockRow: View {
 // MARK: - Mock Detail View
 
 @available(macOS 14, *)
-private struct MockDetailView: View {
+@MainActor private struct MockDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let mock: UnifiedMock
 
@@ -692,7 +692,7 @@ private struct MockDetailView: View {
 // MARK: - Add Mock View
 
 @available(macOS 14, *)
-private struct AddUnifiedMockView: View {
+@MainActor private struct AddUnifiedMockView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ProjectUIManager.self) private var projectManager
     let selection: UnifiedMockView.Selection
@@ -815,7 +815,7 @@ private struct AddUnifiedMockView: View {
 // MARK: - Project Tracking Config Section
 
 @available(macOS 14, *)
-private struct ProjectTrackingSection: View {
+@MainActor private struct ProjectTrackingSection: View {
     let project: String
     let tracking: TrackingConfig
     let projectManager: ProjectUIManager
@@ -970,7 +970,7 @@ private struct ProjectTrackingSection: View {
 // MARK: - Recording Result View (shown after Stop)
 
 @available(macOS 14, *)
-private struct RecordingResultView: View {
+@MainActor private struct RecordingResultView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ProjectUIManager.self) private var projectManager
 

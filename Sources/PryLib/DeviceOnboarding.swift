@@ -21,7 +21,12 @@ public struct DeviceOnboarding {
                 let name = String(cString: interface.ifa_name)
                 if name.hasPrefix("en") || name.hasPrefix("bridge") {  // Wi-Fi, Ethernet, bridge
                     var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                    getnameinfo(interface.ifa_addr, socklen_t(interface.ifa_addr.pointee.sa_len),
+                    #if os(Linux)
+                    let addrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+                    #else
+                    let addrLen = socklen_t(interface.ifa_addr.pointee.sa_len)
+                    #endif
+                    getnameinfo(interface.ifa_addr, addrLen,
                                 &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST)
                     let address = String(cString: hostname)
                     if !address.isEmpty && address != "127.0.0.1" {
