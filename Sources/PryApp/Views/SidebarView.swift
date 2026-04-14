@@ -20,8 +20,6 @@ struct SidebarView: View {
     @Environment(RequestStoreWrapper.self) private var store
     @Environment(MockManager.self) private var mocks
     @Environment(BreakpointUIManager.self) private var breakpoints
-    @Environment(ScenarioUIManager.self) private var scenarios
-    @Environment(StatusOverrideUIManager.self) private var overrides
     @State private var grouped: [AppGroup] = []
     @State private var hoveredCard: String?
 
