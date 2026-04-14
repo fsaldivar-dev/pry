@@ -271,9 +271,12 @@ struct UnifiedMockView: View {
             } else {
                 List {
                     ForEach(mocks, id: \.id) { mock in
-                        UnifiedMockRow(mock: mock) {
+                        UnifiedMockRow(mock: mock, onDelete: {
                             MockEngine.shared.removeLooseMock(id: mock.id)
-                        }
+                        }, onSave: { updated in
+                            MockEngine.shared.removeLooseMock(id: mock.id)
+                            MockEngine.shared.addLooseMock(updated)
+                        })
                     }
                 }
                 .listStyle(.inset)
@@ -462,12 +465,26 @@ struct UnifiedMockView: View {
                 } else {
                     List {
                         ForEach(scenarioData.mocks, id: \.id) { mock in
-                            UnifiedMockRow(mock: mock) {
-                                // Remove mock from scenario
+                            UnifiedMockRow(mock: mock, onDelete: {
+                                // Remove mock from scenario and reload MockEngine
                                 var updated = scenarioData
                                 updated.mocks.removeAll { $0.id == mock.id }
                                 try? projectManager.saveScenario(updated, project: project)
-                            }
+                                if projectManager.activeProject == project && projectManager.activeScenario == scenario {
+                                    MockEngine.shared.loadScenarioMocks(updated.mocks)
+                                }
+                            }, onSave: { editedMock in
+                                // Replace mock in scenario and reload MockEngine
+                                var updated = scenarioData
+                                if let idx = updated.mocks.firstIndex(where: { $0.id == mock.id }) {
+                                    updated.mocks[idx] = editedMock
+                                }
+                                try? projectManager.saveScenario(updated, project: project)
+                                // Reload mocks in engine if this scenario is active
+                                if projectManager.activeProject == project && projectManager.activeScenario == scenario {
+                                    MockEngine.shared.loadScenarioMocks(updated.mocks)
+                                }
+                            })
                         }
                     }
                     .listStyle(.inset)
@@ -489,8 +506,9 @@ struct UnifiedMockView: View {
 @MainActor private struct UnifiedMockRow: View {
     let mock: UnifiedMock
     let onDelete: () -> Void
+    let onSave: (UnifiedMock) -> Void
     @State private var showDeleteConfirmation = false
-    @State private var showDetail = false
+    @State private var showEdit = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -515,7 +533,7 @@ struct UnifiedMockView: View {
                         .lineLimit(1)
                 }
             }
-            .onTapGesture { showDetail = true }
+            .onTapGesture { showEdit = true }
 
             Spacer()
 
@@ -548,9 +566,9 @@ struct UnifiedMockView: View {
                 Button("Delete", role: .destructive, action: onDelete)
             }
         }
-        .sheet(isPresented: $showDetail) {
-            MockDetailView(mock: mock)
-                .frame(minWidth: 500, minHeight: 400)
+        .sheet(isPresented: $showEdit) {
+            MockEditView(mock: mock, onSave: onSave)
+                .frame(minWidth: 500, minHeight: 450)
         }
     }
 
@@ -562,20 +580,46 @@ struct UnifiedMockView: View {
     }
 }
 
-// MARK: - Mock Detail View
+// MARK: - Mock Edit View
 
 @available(macOS 14, *)
-@MainActor private struct MockDetailView: View {
+@MainActor private struct MockEditView: View {
     @Environment(\.dismiss) private var dismiss
     let mock: UnifiedMock
+    let onSave: (UnifiedMock) -> Void
+
+    @State private var method: String
+    @State private var pattern: String
+    @State private var host: String
+    @State private var status: UInt
+    @State private var bodyText: String
+    @State private var delay: String
+    @State private var notes: String
+    @State private var isEnabled: Bool
+
+    private let methods = ["ANY", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+
+    init(mock: UnifiedMock, onSave: @escaping (UnifiedMock) -> Void) {
+        self.mock = mock
+        self.onSave = onSave
+        _method = State(initialValue: mock.method ?? "ANY")
+        _pattern = State(initialValue: mock.pattern)
+        _host = State(initialValue: mock.host ?? "")
+        _status = State(initialValue: mock.status)
+        _bodyText = State(initialValue: mock.body)
+        _delay = State(initialValue: mock.delay.map { String($0) } ?? "")
+        _notes = State(initialValue: mock.notes ?? "")
+        _isEnabled = State(initialValue: mock.isEnabled)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header
             HStack {
-                Text("Mock Detail")
+                Text("Edit Mock")
                     .font(.headline)
                 Spacer()
-                Button("Done") { dismiss() }
+                Button("Cancel") { dismiss() }
                     .keyboardShortcut(.escape, modifiers: [])
             }
             .padding(.horizontal, 12)
@@ -583,108 +627,85 @@ struct UnifiedMockView: View {
 
             Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Method + Status
-                    HStack(spacing: 8) {
-                        Text(mock.method ?? "ANY")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(PryTheme.methodColor(mock.method).opacity(0.2))
-                            .foregroundStyle(PryTheme.methodColor(mock.method))
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-
-                        Text("\(mock.status)")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundStyle(PryTheme.statusColorSwiftUI(mock.status))
-
-                        if let delay = mock.delay, delay > 0 {
-                            Text("\(delay)ms delay")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if let source = mock.source {
-                            Text(source.label)
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(PryTheme.accent.opacity(0.1))
-                                .foregroundStyle(PryTheme.accent)
-                                .clipShape(Capsule())
-                        }
-                    }
-
-                    // Pattern
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Pattern")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        Text(mock.pattern)
-                            .font(.system(size: 13, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
-
-                    // Host
-                    if let host = mock.host, !host.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Host")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            Text(host)
-                                .font(.system(size: 13, design: .monospaced))
-                                .textSelection(.enabled)
-                        }
-                    }
-
-                    // Response Body
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Response Body")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            Text(mock.body)
-                                .font(.system(size: 12, design: .monospaced))
-                                .textSelection(.enabled)
-                        }
-                        .frame(maxHeight: 200)
-                        .padding(8)
-                        .background(PryTheme.bgPanel)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-
-                    // Custom Headers
-                    if let headers = mock.headers, !headers.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Custom Headers")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            ForEach(Array(headers.keys.sorted()), id: \.self) { key in
-                                HStack {
-                                    Text(key)
-                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                        .foregroundStyle(PryTheme.accent)
-                                    Text(headers[key] ?? "")
-                                        .font(.system(size: 11, design: .monospaced))
-                                }
-                            }
-                        }
-                    }
-
-                    // Notes
-                    if let notes = mock.notes, !notes.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Notes")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            Text(notes)
-                                .font(.system(size: 12))
-                        }
+            Form {
+                // Method picker
+                Picker("Method", selection: $method) {
+                    ForEach(methods, id: \.self) { m in
+                        Text(m).tag(m)
                     }
                 }
-                .padding(12)
+
+                // Pattern
+                TextField("URL Pattern (e.g. /api/users)", text: $pattern)
+                    .font(.system(size: 12, design: .monospaced))
+
+                // Host
+                TextField("Host (e.g. api.example.com)", text: $host)
+                    .font(.system(size: 12, design: .monospaced))
+
+                // Status
+                HStack {
+                    Text("Status")
+                    TextField("", value: $status, format: .number)
+                        .frame(width: 60)
+                    ForEach([200, 400, 401, 404, 500], id: \.self) { code in
+                        Button("\(code)") { status = UInt(code) }
+                            .font(.system(size: 10, design: .monospaced))
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                    }
+                }
+
+                // Delay
+                TextField("Delay (ms)", text: $delay)
+
+                // Notes
+                TextField("Notes", text: $notes)
+
+                // Enabled toggle
+                Toggle("Enabled", isOn: $isEnabled)
+
+                // Response body
+                Section("Response Body") {
+                    TextEditor(text: $bodyText)
+                        .font(.system(size: 12, design: .monospaced))
+                        .frame(minHeight: 120)
+                }
             }
+            .padding(12)
+
+            Divider()
+
+            // Footer with source info + save
+            HStack {
+                if let source = mock.source {
+                    Text("Source: \(source.label)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Save") {
+                    let updated = UnifiedMock(
+                        id: mock.id,
+                        method: method == "ANY" ? nil : method,
+                        pattern: pattern,
+                        host: host.isEmpty ? nil : host,
+                        status: status,
+                        headers: mock.headers,
+                        body: bodyText,
+                        contentType: mock.contentType,
+                        delay: Int(delay),
+                        notes: notes.isEmpty ? nil : notes,
+                        source: mock.source,
+                        isEnabled: isEnabled
+                    )
+                    onSave(updated)
+                    dismiss()
+                }
+                .disabled(pattern.isEmpty)
+                .keyboardShortcut(.return, modifiers: .command)
+            }
+            .padding(12)
         }
     }
 }

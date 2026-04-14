@@ -421,16 +421,17 @@ struct RequestListView: NSViewRepresentable {
 
         @objc private func mockRequest(_ sender: NSMenuItem) {
             guard let req = sender.representedObject as? RequestStore.CapturedRequest else { return }
-            // Extract URL path for mock pattern
-            let pattern: String
-            if let url = URL(string: req.url) {
-                pattern = url.path.isEmpty ? "/" : url.path
-            } else {
-                pattern = req.url
-            }
-            let body = req.responseBody ?? "{}"
-            Config.saveMock(path: pattern, response: body)
-            print("[PryApp] Mocked \(req.method) \(pattern)")
+            let pattern = req.url.hasPrefix("/") ? req.url : "/\(req.url)"
+            let mock = UnifiedMock(
+                method: req.method,
+                pattern: pattern,
+                host: req.host,
+                status: req.statusCode ?? 200,
+                body: req.responseBody ?? "{}",
+                source: .loose,
+                isEnabled: true
+            )
+            MockEngine.shared.addLooseMock(mock)
         }
 
         // MARK: - Badge colors
