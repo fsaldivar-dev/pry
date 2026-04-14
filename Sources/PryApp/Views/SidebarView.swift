@@ -97,6 +97,7 @@ struct SidebarView: View {
                     Text("\(store.requests.count) peticiones")
                         .font(.caption)
                         .foregroundStyle(PryTheme.textSecondary)
+                        .lineLimit(1)
                 }
 
                 Spacer()
@@ -161,6 +162,7 @@ struct SidebarView: View {
                     Text("\(group.total) peticiones")
                         .font(.caption)
                         .foregroundStyle(PryTheme.textSecondary)
+                        .lineLimit(1)
                 }
 
                 Spacer()
