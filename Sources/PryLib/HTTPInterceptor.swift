@@ -72,11 +72,20 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
             Recorder.shared.noteRequestStart(
                 requestId: requestId,
                 method: "\(head.method)",
-                url: head.uri,
+                url: path,
                 host: host,
                 headers: head.headers.map { ($0.name, $0.value) },
                 body: bodyString
             )
+        }
+
+        // Project tracking — auto-tag request with project
+        let userAgent = head.headers.first(name: "User-Agent")
+        if let projectName = ProjectManager.findProject(host: host, userAgent: userAgent) {
+            RequestStore.shared.tagProject(id: requestId, project: projectName)
+            if let ua = userAgent {
+                ProjectManager.autoLearnUserAgent(project: projectName, userAgent: ua)
+            }
         }
 
         // Breakpoint check

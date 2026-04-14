@@ -10,12 +10,22 @@ public final class ProjectUIManager {
     public var activeProject: String?
     public var activeScenario: String?
 
-    public init() { reload() }
+    public init() {
+        reload()
+        // Re-activate scenario on app launch if one was active
+        restoreActiveScenario()
+    }
 
     public func reload() {
         projects = ProjectManager.list()
         activeProject = ProjectManager.activeProject()
         activeScenario = ProjectManager.activeScenario()
+    }
+
+    /// On app launch, if a scenario was active, re-load its mocks into MockEngine.
+    private func restoreActiveScenario() {
+        guard let project = activeProject, let scenario = activeScenario else { return }
+        _ = ProjectManager.activate(project: project, scenario: scenario)
     }
 
     public func createProject(name: String) throws {
@@ -65,6 +75,15 @@ public final class ProjectUIManager {
         let count = ProjectManager.copyMocks(fromProject: fromProject, fromScenario: fromScenario, toProject: toProject, toScenario: toScenario)
         reload()
         return count
+    }
+
+    public func loadProject(name: String) -> Project? {
+        ProjectManager.load(name: name)
+    }
+
+    public func updateTracking(project: String, config: TrackingConfig) {
+        ProjectManager.updateTracking(project: project, config: config)
+        reload()
     }
 
     public var activeLabel: String? {

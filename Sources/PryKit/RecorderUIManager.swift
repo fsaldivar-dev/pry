@@ -17,15 +17,20 @@ public final class RecorderUIManager {
         recordings = Recorder.list()
     }
 
-    public func start(name: String) {
-        Recorder.shared.start(name: name)
+    public var lastRecordingName: String?
+
+    public func start(name: String, domains: [String] = []) {
+        Recorder.shared.start(name: name, domains: domains)
         isRecording = true
+        lastRecordingName = name
     }
 
-    public func stop() {
-        _ = Recorder.shared.stop()
+    public func stop() -> Recording? {
+        let recording = Recorder.shared.stop()
         isRecording = false
+        lastRecordingName = nil
         reload()
+        return recording
     }
 
     public func delete(name: String) {

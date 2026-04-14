@@ -1,12 +1,83 @@
 import Foundation
 
+public enum TrackingMode: String, Codable, CaseIterable, Sendable {
+    case domain = "domain"
+    case userAgent = "userAgent"
+    case both = "both"
+}
+
+public struct TrackingConfig: Codable, Equatable, Sendable {
+    public var domains: [String]
+    public var userAgents: [String]  // supports glob patterns like "SimulationPry/*"
+    public var mode: TrackingMode
+    public var autoDetect: Bool
+
+    public init(domains: [String] = [], userAgents: [String] = [],
+                mode: TrackingMode = .domain, autoDetect: Bool = true) {
+        self.domains = domains
+        self.userAgents = userAgents
+        self.mode = mode
+        self.autoDetect = autoDetect
+    }
+
+    /// Check if a request matches this tracking config.
+    public func matches(host: String, userAgent: String?) -> Bool {
+        switch mode {
+        case .domain:
+            return matchesDomain(host)
+        case .userAgent:
+            return matchesUserAgent(userAgent)
+        case .both:
+            return matchesDomain(host) && matchesUserAgent(userAgent)
+        }
+    }
+
+    private func matchesDomain(_ host: String) -> Bool {
+        guard !domains.isEmpty else { return false }
+        let h = host.lowercased()
+        return domains.contains { domain in
+            let d = domain.lowercased()
+            if d.hasPrefix("*.") {
+                return h.hasSuffix(String(d.dropFirst(1))) || h == String(d.dropFirst(2))
+            }
+            return h == d || h.hasSuffix(".\(d)")
+        }
+    }
+
+    private func matchesUserAgent(_ ua: String?) -> Bool {
+        guard let ua = ua, !userAgents.isEmpty else { return userAgents.isEmpty }
+        return userAgents.contains { pattern in
+            if pattern.contains("*") {
+                let regex = "^" + NSRegularExpression.escapedPattern(for: pattern)
+                    .replacingOccurrences(of: "\\*", with: ".*") + "$"
+                return (try? NSRegularExpression(pattern: regex))
+                    .flatMap { $0.firstMatch(in: ua, range: NSRange(ua.startIndex..., in: ua)) } != nil
+            }
+            return ua.contains(pattern)
+        }
+    }
+}
+
 public struct Project: Codable, Equatable {
     public var name: String
     public let createdAt: Date
+    public var tracking: TrackingConfig
+
+    enum CodingKeys: String, CodingKey {
+        case name, createdAt, tracking
+    }
 
     public init(name: String) {
         self.name = name
         self.createdAt = Date()
+        self.tracking = TrackingConfig()
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        tracking = try c.decodeIfPresent(TrackingConfig.self, forKey: .tracking) ?? TrackingConfig()
     }
 }
 
@@ -122,9 +193,16 @@ public struct ProjectManager {
         // Clear existing config via ScenarioManager
         ScenarioManager.deactivate()
 
-        // Apply all config from scenario
+        // Apply watchlist from scenario + project tracking domains
         for domain in scenarioData.watchlist { Watchlist.add(domain) }
+        // Also add project tracking domains to watchlist for HTTPS interception
+        if let proj = load(name: project) {
+            for domain in proj.tracking.domains {
+                Watchlist.add(domain)
+            }
+        }
         MockEngine.shared.loadScenarioMocks(scenarioData.mocks)
+        print("[ProjectManager] Activated \(project)/\(scenario) with \(scenarioData.mocks.count) mocks, MockEngine now has \(MockEngine.shared.count) total")
         for header in scenarioData.headers {
             if header.action == "add", let value = header.value {
                 HeaderRewrite.addRule(name: header.name, value: value)
@@ -164,6 +242,41 @@ public struct ProjectManager {
         guard let content = try? String(contentsOfFile: activeFile, encoding: .utf8) else { return nil }
         let parts = content.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "/", maxSplits: 1)
         return parts.count >= 2 ? String(parts[1]) : nil
+    }
+
+    // MARK: - Tracking
+
+    /// Update tracking config for a project.
+    public static func updateTracking(project: String, config: TrackingConfig) {
+        guard var proj = load(name: project) else { return }
+        proj.tracking = config
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(proj) {
+            try? data.write(to: URL(fileURLWithPath: "\(projectsDir)/\(project)/project.json"), options: .atomic)
+        }
+    }
+
+    /// Auto-detect: add a user-agent to a project's tracking if autoDetect is on.
+    public static func autoLearnUserAgent(project: String, userAgent: String) {
+        guard var proj = load(name: project), proj.tracking.autoDetect else { return }
+        let ua = userAgent.trimmingCharacters(in: .whitespaces)
+        if !ua.isEmpty && !proj.tracking.userAgents.contains(ua) {
+            proj.tracking.userAgents.append(ua)
+            updateTracking(project: project, config: proj.tracking)
+        }
+    }
+
+    /// Find which project a request belongs to.
+    public static func findProject(host: String, userAgent: String?) -> String? {
+        for project in list() {
+            guard let proj = load(name: project) else { continue }
+            if proj.tracking.matches(host: host, userAgent: userAgent) {
+                return project
+            }
+        }
+        return nil
     }
 
     /// Capture current proxy state as a scenario within a project.
