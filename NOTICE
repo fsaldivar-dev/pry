@@ -1,0 +1,65 @@
+Pry — HTTP/HTTPS Debugging Proxy
+Copyright 2024-2026 Francisco Javier Saldivar Rubio
+
+This product includes software developed by Apple Inc. and the
+Swift open source community, licensed under the Apache License 2.0.
+
+==============================================================================
+Third-Party Dependencies (Apache License 2.0)
+==============================================================================
+
+SwiftNIO
+  Copyright 2017-2024 Apple Inc. and the SwiftNIO project authors
+  https://github.com/apple/swift-nio
+  Licensed under Apache License 2.0
+
+SwiftNIO SSL
+  Copyright 2017-2024 Apple Inc. and the SwiftNIO project authors
+  https://github.com/apple/swift-nio-ssl
+  Licensed under Apache License 2.0
+
+Swift Certificates
+  Copyright 2022-2024 Apple Inc. and the Swift project authors
+  https://github.com/apple/swift-certificates
+  Licensed under Apache License 2.0
+
+Swift Crypto
+  Copyright 2019-2024 Apple Inc. and the Swift project authors
+  https://github.com/apple/swift-crypto
+  Licensed under Apache License 2.0
+
+Swift ASN1
+  Copyright 2022-2024 Apple Inc. and the Swift project authors
+  https://github.com/apple/swift-asn1
+  Licensed under Apache License 2.0
+
+Swift Atomics
+  Copyright 2020-2024 Apple Inc. and the Swift project authors
+  https://github.com/apple/swift-atomics
+  Licensed under Apache License 2.0
+
+Swift Collections
+  Copyright 2021-2024 Apple Inc. and the Swift project authors
+  https://github.com/apple/swift-collections
+  Licensed under Apache License 2.0
+
+Swift System
+  Copyright 2020-2024 Apple Inc. and the Swift project authors
+  https://github.com/apple/swift-system
+  Licensed under Apache License 2.0
+
+==============================================================================
+Apache License 2.0
+==============================================================================
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use these files except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
