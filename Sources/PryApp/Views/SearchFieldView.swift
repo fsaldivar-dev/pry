@@ -8,6 +8,9 @@ struct SearchFieldView: NSViewRepresentable {
     @Binding var text: String
     var placeholder: String = "Filter…"
 
+    /// Shared reference so Cmd+F can focus the field from anywhere.
+    static weak var activeField: NSSearchField?
+
     func makeNSView(context: Context) -> NSSearchField {
         let field = NSSearchField()
         field.placeholderString = placeholder
@@ -16,9 +19,9 @@ struct SearchFieldView: NSViewRepresentable {
         field.delegate = context.coordinator
         field.target = context.coordinator
         field.action = #selector(Coordinator.textChanged(_:))
-        // Continuous search — filter as you type
         field.sendsSearchStringImmediately = true
         field.sendsWholeSearchString = false
+        Self.activeField = field
         return field
     }
 
