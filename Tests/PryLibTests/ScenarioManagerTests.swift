@@ -45,21 +45,21 @@ final class ScenarioManagerTests: XCTestCase {
     func testSaveWithData() throws {
         var scenario = Scenario(name: "with-data")
         scenario.watchlist = ["api.example.com"]
-        scenario.mocks = [MockEntry(path: "/api/test", body: "{\"ok\":true}")]
+        scenario.mocks = [UnifiedMock(pattern: "/api/test", status: 200, body: "{\"ok\":true}")]
         scenario.breakpoints = ["/api/login"]
         try ScenarioManager.save(scenario)
 
         let loaded = ScenarioManager.load(name: "with-data")
         XCTAssertEqual(loaded?.watchlist, ["api.example.com"])
         XCTAssertEqual(loaded?.mocks.count, 1)
-        XCTAssertEqual(loaded?.mocks.first?.path, "/api/test")
+        XCTAssertEqual(loaded?.mocks.first?.pattern, "/api/test")
         XCTAssertEqual(loaded?.breakpoints, ["/api/login"])
     }
 
     func testActivateAndDeactivate() throws {
         var scenario = Scenario(name: "active-test")
         scenario.watchlist = ["test.example.com"]
-        scenario.mocks = [MockEntry(path: "/test", body: "{}")]
+        scenario.mocks = [UnifiedMock(pattern: "/test", status: 200, body: "{}")]
         scenario.blocklist = ["blocked.com"]
         try ScenarioManager.save(scenario)
 
@@ -69,8 +69,8 @@ final class ScenarioManagerTests: XCTestCase {
 
         // Verify config was applied
         XCTAssertTrue(Watchlist.load().contains("test.example.com"))
-        let mocks = Config.loadMocks()
-        XCTAssertNotNil(mocks["/test"])
+        let mocks = MockEngine.shared.activeMocks()
+        XCTAssertTrue(mocks.contains(where: { $0.pattern == "/test" }))
         XCTAssertTrue(BlockList.isBlocked("blocked.com"))
 
         // Deactivate
@@ -79,7 +79,7 @@ final class ScenarioManagerTests: XCTestCase {
 
         // Verify config was cleared
         XCTAssertFalse(Watchlist.load().contains("test.example.com"))
-        XCTAssertTrue(Config.loadMocks().isEmpty)
+        XCTAssertTrue(MockEngine.shared.activeMocks().isEmpty)
         XCTAssertFalse(BlockList.isBlocked("blocked.com"))
     }
 

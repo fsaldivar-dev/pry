@@ -172,9 +172,15 @@ struct RequestListView: NSViewRepresentable {
                 tf.alignment = .center
                 tf.textColor = PryTheme.statusColor(req.statusCode)
             case "host":
-                tf.stringValue = req.host
+                if req.isMock, let source = req.mockSource {
+                    tf.stringValue = "\(req.host)  [\(source)]"
+                } else if req.isMock {
+                    tf.stringValue = "\(req.host)  [MOCK]"
+                } else {
+                    tf.stringValue = req.host
+                }
                 tf.font = .systemFont(ofSize: 11)
-                tf.textColor = PryTheme.nsTextPrimary
+                tf.textColor = req.isMock ? NSColor(red: 168/255, green: 85/255, blue: 247/255, alpha: 1) : PryTheme.nsTextPrimary
             case "path":
                 // Show relative path instead of full URL
                 if let url = URL(string: req.url) {
@@ -370,6 +376,17 @@ struct RequestListView: NSViewRepresentable {
             copyHostItem.representedObject = req
             copyHostItem.target = self
             menu.addItem(copyHostItem)
+
+            menu.addItem(.separator())
+
+            // Mock this request
+            let mockItem = NSMenuItem(
+                title: "Mock this request",
+                action: #selector(mockRequest(_:)),
+                keyEquivalent: "")
+            mockItem.representedObject = req
+            mockItem.target = self
+            menu.addItem(mockItem)
         }
 
         @objc private func toggleSSL(_ sender: NSMenuItem) {
@@ -398,6 +415,20 @@ struct RequestListView: NSViewRepresentable {
             guard let req = sender.representedObject as? RequestStore.CapturedRequest else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(req.host, forType: .string)
+        }
+
+        @objc private func mockRequest(_ sender: NSMenuItem) {
+            guard let req = sender.representedObject as? RequestStore.CapturedRequest else { return }
+            // Extract URL path for mock pattern
+            let pattern: String
+            if let url = URL(string: req.url) {
+                pattern = url.path.isEmpty ? "/" : url.path
+            } else {
+                pattern = req.url
+            }
+            let body = req.responseBody ?? "{}"
+            Config.saveMock(path: pattern, response: body)
+            print("[PryApp] Mocked \(req.method) \(pattern)")
         }
 
         // MARK: - Badge colors

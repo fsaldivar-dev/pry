@@ -25,7 +25,7 @@ final class ScenarioExporterTests: XCTestCase {
     func testExportAndImport() throws {
         var scenario = Scenario(name: "export-test")
         scenario.watchlist = ["api.example.com"]
-        scenario.mocks = [MockEntry(path: "/api/test", body: "{\"ok\":true}")]
+        scenario.mocks = [UnifiedMock(pattern: "/api/test", status: 200, body: "{\"ok\":true}")]
         try ScenarioManager.save(scenario)
 
         let exportPath = "\(tempDir!)/test.pryscenario"
