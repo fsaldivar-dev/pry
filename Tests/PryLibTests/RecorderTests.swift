@@ -5,12 +5,14 @@ final class RecorderTests: XCTestCase {
     override func setUp() {
         super.setUp()
         Recorder.clearAll()
+        MockEngine.shared.clearAll()
         _ = Recorder.shared.stop() // Ensure not recording
     }
 
     override func tearDown() {
         _ = Recorder.shared.stop()
         Recorder.clearAll()
+        MockEngine.shared.clearAll()
         Config.clearMocks()
         super.tearDown()
     }
@@ -88,8 +90,10 @@ final class RecorderTests: XCTestCase {
 
         let count = Recorder.toMocks(name: "mock-convert")
         XCTAssertEqual(count, 1)
-        let mocks = Config.loadMocks()
-        XCTAssertEqual(mocks["/api/data"], "{\"data\":true}")
+        let mocks = MockEngine.shared.looseMockList()
+        XCTAssertEqual(mocks.count, 1)
+        XCTAssertEqual(mocks.first?.pattern, "/api/data")
+        XCTAssertEqual(mocks.first?.body, "{\"data\":true}")
     }
 
     func testIgnoreStepsWhenNotRecording() {
