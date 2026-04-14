@@ -116,5 +116,13 @@ struct FilterBarView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(PryTheme.bgHeader)
+        // Cmd+F focuses the search field
+        .onKeyPress(.init("f"), phases: .down) { event in
+            guard event.modifiers.contains(.command) else { return .ignored }
+            if let field = SearchFieldView.activeField {
+                field.window?.makeFirstResponder(field)
+            }
+            return .handled
+        }
     }
 }
