@@ -362,9 +362,15 @@ Diario crudo de desarrollo — cada sesión, cada intento, cada error.
 
 ---
 
+## Aviso legal
+
+Pry es una herramienta de desarrollo para depurar trafico de red en tus propias aplicaciones y ambientes autorizados. La intercepcion de trafico de red ajeno sin consentimiento es ilegal en la mayoria de jurisdicciones. Usa esta herramienta de forma responsable.
+
 ## Licencia
 
-MIT
+MIT — ver [LICENSE](./LICENSE)
+
+Las dependencias de Apple (SwiftNIO, swift-certificates, swift-crypto) estan licenciadas bajo Apache 2.0. Ver [NOTICE](./NOTICE) para detalles.
 
 ---
 
