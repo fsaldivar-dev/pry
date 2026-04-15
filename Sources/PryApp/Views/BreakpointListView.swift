@@ -4,6 +4,7 @@ import PryKit
 @available(macOS 14, *)
 @MainActor
 struct BreakpointListView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(BreakpointUIManager.self) private var breakpoints
     @State private var newPattern: String = ""
 
@@ -21,6 +22,8 @@ struct BreakpointListView: View {
                     }
                     .help("Clear All")
                 }
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

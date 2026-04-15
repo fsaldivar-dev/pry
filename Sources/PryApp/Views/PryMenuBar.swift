@@ -11,7 +11,7 @@ struct PryMenuBarContent: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Circle()
-                    .fill(proxy.isRunning ? .green : .red)
+                    .fill(proxy.isRunning ? PryTheme.success : PryTheme.error)
                     .frame(width: 8, height: 8)
                 Text(proxy.isRunning ? "Proxy Running" : "Proxy Stopped")
                     .font(.headline)

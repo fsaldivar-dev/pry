@@ -1,7 +1,10 @@
 import Foundation
 
 public struct MapRemote {
-    public static let redirectsFile = "/tmp/pry.redirects"
+    public static var redirectsFile: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.redirectsFile
+    }
 
     public struct RedirectRule {
         public let sourceHost: String

@@ -48,7 +48,7 @@ struct CodeGenView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
             }
-            .background(Color(nsColor: .textBackgroundColor))
+            .background(PryTheme.bgPanel)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .padding(.horizontal)
             .padding(.bottom, 8)

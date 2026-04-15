@@ -1,7 +1,10 @@
 import Foundation
 
 public struct BlockList {
-    public static let blocksFile = "/tmp/pry.blocklist"
+    public static var blocksFile: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.blocksFile
+    }
 
     public static func add(_ domain: String) {
         let sanitized = domain.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)

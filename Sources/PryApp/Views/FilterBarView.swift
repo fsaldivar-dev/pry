@@ -6,7 +6,7 @@ import PryKit
 struct FilterBarView: View {
     @Environment(RequestStoreWrapper.self) private var store
 
-    private let methods = ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    private let methods = ["GET", "POST", "PUT", "PATCH", "DELETE"]
     private let statusRanges: [(label: String, range: ClosedRange<UInt>)] = [
         ("2xx", 200...299),
         ("3xx", 300...399),
@@ -17,74 +17,150 @@ struct FilterBarView: View {
     var body: some View {
         @Bindable var store = store
 
-        HStack(spacing: 6) {
-            // Method chips
-            ForEach(methods, id: \.self) { method in
-                FilterChip(
-                    title: method,
-                    isActive: store.filterMethod == method
-                ) {
-                    store.filterMethod = store.filterMethod == method ? nil : method
-                }
-            }
-
-            Divider().frame(height: 16)
-
-            // Status chips
-            ForEach(statusRanges, id: \.label) { entry in
-                FilterChip(
-                    title: entry.label,
-                    isActive: store.filterStatus == entry.range
-                ) {
-                    store.filterStatus = store.filterStatus == entry.range ? nil : entry.range
-                }
-            }
-
-            Divider().frame(height: 16)
-
-            // Search field
-            HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-                TextField("Filter...", text: $store.filterText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 11))
-                if !store.filterText.isEmpty {
-                    Button {
-                        store.filterText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                            .font(.caption)
-                    }
-                    .buttonStyle(.borderless)
-                }
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(.quaternary)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .frame(maxWidth: 200)
+        HStack(spacing: 8) {
+            // Search field first — prominent, takes most space
+            SearchFieldView(text: $store.filterText, placeholder: "Filter path, host or body...")
+                .frame(maxHeight: 24)
 
             Spacer()
 
-            // Active filters indicator — computed inline for @Bindable consistency
+            // Method filter — icon style
+            Menu {
+                Button("All Methods") { store.filterMethod = nil }
+                Divider()
+                ForEach(methods, id: \.self) { method in
+                    Button {
+                        store.filterMethod = store.filterMethod == method ? nil : method
+                    } label: {
+                        HStack {
+                            Text(method)
+                            if store.filterMethod == method {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 10))
+                    Text(store.filterMethod ?? "Method")
+                        .font(.system(size: 11, weight: store.filterMethod != nil ? .semibold : .regular))
+                }
+                .foregroundStyle(store.filterMethod != nil ? PryTheme.accent : PryTheme.textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(store.filterMethod != nil ? PryTheme.accent.opacity(0.12) : Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
+            }
+            .buttonStyle(.borderless)
+
+            // Status filter — icon style
+            Menu {
+                Button("All Status") { store.filterStatus = nil }
+                Divider()
+                ForEach(statusRanges, id: \.label) { entry in
+                    Button {
+                        store.filterStatus = store.filterStatus == entry.range ? nil : entry.range
+                    } label: {
+                        HStack {
+                            Text(entry.label)
+                            if store.filterStatus == entry.range {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                let activeLabel = statusRanges.first(where: { $0.range == store.filterStatus })?.label
+                HStack(spacing: 4) {
+                    Image(systemName: "circle.grid.2x1")
+                        .font(.system(size: 10))
+                    Text(activeLabel ?? "Status")
+                        .font(.system(size: 11, weight: activeLabel != nil ? .semibold : .regular))
+                }
+                .foregroundStyle(store.filterStatus != nil ? PryTheme.accent : PryTheme.textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(store.filterStatus != nil ? PryTheme.accent.opacity(0.12) : Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
+            }
+            .buttonStyle(.borderless)
+
+            // Source filter — mocked vs real
+            Menu {
+                Button("All Sources") { store.filterMockSource = .all }
+                Divider()
+                ForEach(MockSourceFilter.allCases.filter { $0 != .all }, id: \.self) { source in
+                    Button {
+                        store.filterMockSource = store.filterMockSource == source ? .all : source
+                    } label: {
+                        HStack {
+                            Text(source.rawValue)
+                            if store.filterMockSource == source {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                let isActive = store.filterMockSource != .all
+                HStack(spacing: 4) {
+                    Image(systemName: "shippingbox")
+                        .font(.system(size: 10))
+                    Text(isActive ? store.filterMockSource.rawValue : "Source")
+                        .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+                }
+                .foregroundStyle(isActive ? PryTheme.accent : PryTheme.textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(isActive ? PryTheme.accent.opacity(0.12) : Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
+            }
+            .buttonStyle(.borderless)
+
+            // Clear all
             let hasActive = store.filterMethod != nil ||
                             store.filterStatus != nil ||
+                            store.filterMockSource != .all ||
                             !store.filterText.isEmpty
             if hasActive {
-                Button("Clear Filters") {
+                Button {
                     store.filterMethod = nil
                     store.filterStatus = nil
+                    store.filterMockSource = .all
                     store.filterText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(PryTheme.textTertiary)
                 }
-                .font(.caption)
                 .buttonStyle(.borderless)
+                .help("Clear all filters")
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(.bar)
+        .background(PryTheme.bgHeader)
+        // Cmd+F focuses the search field
+        .onKeyPress(.init("f"), phases: .down) { event in
+            guard event.modifiers.contains(.command) else { return .ignored }
+            if let field = SearchFieldView.activeField {
+                field.window?.makeFirstResponder(field)
+            }
+            return .handled
+        }
     }
 }

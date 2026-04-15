@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Proxy HTTP/HTTPS para iOS devs. Swift puro. Un binario. Sin dependencias externas.</strong>
+  <strong>Proxy HTTP/HTTPS para iOS devs. Swift puro. CLI + GUI nativa macOS. Sin dependencias externas.</strong>
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 Existen herramientas excelentes para debuggear tráfico de red — Proxyman, Charles, mitmproxy. Cada una resuelve el problema a su manera y el trabajo que hay detrás merece respeto.
 
-Lo que no existe es una alternativa open source en Swift, liviana, que se integre nativamente en el ecosistema iOS desde la terminal. Sin Python. Sin runtime. Sin UI. Un binario que intercepta, mockea y observa.
+Lo que no existe es una alternativa open source en Swift, liviana, que se integre nativamente en el ecosistema iOS. Sin Python. Sin runtime. Un binario CLI + una app nativa macOS que intercepta, mockea y observa. Testing environment manager para equipos de desarrollo mobile.
 
 ```bash
 pry start
@@ -320,6 +320,50 @@ c → copia al clipboard en el formato seleccionado
 | `Esc` | Limpiar filtro/busqueda |
 | `q` | Salir |
 
+### PryApp — GUI Desktop (macOS)
+
+Pry incluye una app nativa de macOS con interfaz visual completa.
+
+```bash
+# Desde fuente
+swift build --product PryApp
+.build/debug/PryApp
+
+# O descarga PryApp.zip desde GitHub Releases
+```
+
+**Features de la GUI:**
+
+| Feature | Descripcion |
+|---------|-------------|
+| **Project > Scenario > Mocks** | Organiza mocks por proyecto y escenario de testing |
+| **Mock Engine** | Status codes, method matching, headers, delay — todo configurable |
+| **Recorder** | Graba trafico, selecciona requests, convierte a mocks |
+| **Tracking** | Dominios + User-Agents por proyecto, auto-deteccion |
+| **Source Filter** | Filtra trafico por All / Mocked / Real |
+| **Right-click Mock** | Click derecho en request → "Mock this request" |
+| **Device Setup** | Servidor de setup para dispositivos fisicos (QR + instrucciones) |
+| **Export/Import** | Comparte escenarios como `.pryscenario` con tu equipo |
+| **Crash Recovery** | Detecta proxy huerfano y restaura internet automaticamente |
+
+**Toolbar:**
+
+```
+[Start/Stop] [Clear] [Mocking] [Breakpoints] [Rules] [Device]
+```
+
+**Sidebar:** Agrupa trafico por app + muestra configuracion activa (proyecto, mocks, breakpoints).
+
+**Workflow tipico:**
+
+1. Crea un proyecto ("MiApp") con dominios a trackear
+2. Crea un escenario ("Happy Path") dentro del proyecto
+3. Graba trafico real → selecciona requests → convierte a mocks
+4. Activa el escenario → todos los mocks interceptan automaticamente
+5. Cambia a otro escenario ("Error Testing") con un click
+
+---
+
 ### App de testing (iOS Simulator)
 
 SimulationPry es una app iOS incluida para probar Pry con el Simulator:
@@ -362,9 +406,15 @@ Diario crudo de desarrollo — cada sesión, cada intento, cada error.
 
 ---
 
+## Aviso legal
+
+Pry es una herramienta de desarrollo para depurar trafico de red en tus propias aplicaciones y ambientes autorizados. La intercepcion de trafico de red ajeno sin consentimiento es ilegal en la mayoria de jurisdicciones. Usa esta herramienta de forma responsable.
+
 ## Licencia
 
-MIT
+MIT — ver [LICENSE](./LICENSE)
+
+Las dependencias de Apple (SwiftNIO, swift-certificates, swift-crypto) estan licenciadas bajo Apache 2.0. Ver [NOTICE](./NOTICE) para detalles.
 
 ---
 

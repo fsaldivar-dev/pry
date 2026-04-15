@@ -301,6 +301,31 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
         BodyPrinter.printRequestBody(body, requestId: requestId)
         Config.appendLog(logEntry)
 
+        // Recorder hook — capture HTTPS request when recording
+        if Recorder.shared.isRecording {
+            var bodyString: String?
+            if var buf = body, buf.readableBytes > 0 {
+                bodyString = buf.readString(length: buf.readableBytes)
+            }
+            Recorder.shared.noteRequestStart(
+                requestId: requestId,
+                method: "\(head.method)",
+                url: head.uri,
+                host: host,
+                headers: head.headers.map { ($0.name, $0.value) },
+                body: bodyString
+            )
+        }
+
+        // Project tracking
+        let userAgent = head.headers.first(name: "User-Agent")
+        if let projectName = ProjectManager.findProject(host: host, userAgent: userAgent) {
+            RequestStore.shared.tagProject(id: requestId, project: projectName)
+            if let ua = userAgent {
+                ProjectManager.autoLearnUserAgent(project: projectName, userAgent: ua)
+            }
+        }
+
         // WebSocket upgrade detection
         let upgradeHeader = head.headers["Upgrade"].first?.lowercased()
         if upgradeHeader == "websocket" {
@@ -344,30 +369,68 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
     }
 
     private func continueRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int) {
-        // Check mocks — supports both "domain:path" and simple "/path" formats
-        let mocks = Config.loadMocks()
-        for (mockKey, response) in mocks {
+        // Mock check via MockEngine (unified: covers status overrides + mocks)
+        if let mock = MockEngine.shared.findMock(path: head.uri, host: host, method: "\(head.method)") {
+            let sourceLabel = mock.source?.label ?? "loose"
+            let ct = mock.contentType ?? "application/json"
+            BodyPrinter.printMock(path: head.uri, json: mock.body)
+            BodyPrinter.storeResponse(requestId: requestId, statusCode: mock.status,
+                                      headers: [("Content-Type", ct), ("X-Pry-Mock", "true")],
+                                      body: mock.body, isMock: true, mockSource: sourceLabel)
+            Config.appendLog("MOCK \(head.uri) -> \(mock.status) [\(sourceLabel)]")
+            OutputBroker.shared.log("🎭 Mock \(mock.status) → \(host)\(head.uri) [\(sourceLabel)]", type: .mock)
+
+            let sendResponse = {
+                var headers = HTTPHeaders()
+                headers.add(name: "Content-Type", value: ct)
+                headers.add(name: "X-Pry-Mock", value: "true")
+                if let customHeaders = mock.headers {
+                    for (name, value) in customHeaders {
+                        headers.add(name: name, value: value)
+                    }
+                }
+                let responseHead = HTTPResponseHead(version: .http1_1,
+                                                    status: HTTPResponseStatus(statusCode: Int(mock.status)),
+                                                    headers: headers)
+                context.write(self.wrapOutboundOut(.head(responseHead)), promise: nil)
+                var buffer = context.channel.allocator.buffer(capacity: mock.body.utf8.count)
+                buffer.writeString(mock.body)
+                context.write(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+                context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
+            }
+
+            if let delay = mock.delay, delay > 0 {
+                context.eventLoop.scheduleTask(in: .milliseconds(Int64(delay))) { sendResponse() }
+            } else {
+                sendResponse()
+            }
+            return
+        }
+
+        // Legacy mock fallback — for mocks added via CLI while proxy is running
+        let legacyMocks = Config.loadMocks()
+        for (mockKey, response) in legacyMocks {
             let matches: Bool
             if mockKey.contains(":") {
                 let parts = mockKey.split(separator: ":", maxSplits: 1)
-                let mockDomain = String(parts[0])
-                let mockPath = String(parts[1])
-                matches = host.contains(mockDomain) && head.uri.hasPrefix(mockPath)
+                matches = host.contains(String(parts[0])) && head.uri.hasPrefix(String(parts[1]))
             } else {
                 matches = head.uri.hasPrefix(mockKey)
             }
             if matches {
+                let legacyMock = UnifiedMock(pattern: mockKey, body: response, source: .loose)
+                let ct = "application/json"
                 BodyPrinter.printMock(path: head.uri, json: response)
-                Config.appendLog("MOCK \(head.uri) -> 200 OK")
+                BodyPrinter.storeResponse(requestId: requestId, statusCode: 200, headers: [("Content-Type", ct)], body: response, isMock: true, mockSource: "loose")
                 var headers = HTTPHeaders()
-                headers.add(name: "Content-Type", value: "application/json")
+                headers.add(name: "Content-Type", value: ct)
                 headers.add(name: "X-Pry-Mock", value: "true")
                 let responseHead = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
-                context.write(wrapOutboundOut(.head(responseHead)), promise: nil)
+                context.write(self.wrapOutboundOut(.head(responseHead)), promise: nil)
                 var buffer = context.channel.allocator.buffer(capacity: response.utf8.count)
                 buffer.writeString(response)
-                context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
-                context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
+                context.write(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+                context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
                 return
             }
         }
