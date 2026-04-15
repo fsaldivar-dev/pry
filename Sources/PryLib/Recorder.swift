@@ -58,7 +58,10 @@ public final class Recorder {
 
     public static let shared = Recorder()
 
-    private static let recordingsDir = ".pry/recordings"
+    private static var recordingsDir: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.recordingsDir
+    }
 
     private var currentRecording: Recording?
     private var pendingRequests: [Int: (start: Date, method: String, url: String, host: String, headers: [CodableHeader], body: String?)] = [:]

@@ -1,7 +1,10 @@
 import Foundation
 
 public struct MapLocal {
-    public static let mapsFile = "/tmp/pry.maps"
+    public static var mapsFile: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.mapsFile
+    }
 
     public struct MapRule {
         public let regex: String

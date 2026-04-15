@@ -93,8 +93,11 @@ public struct Project: Codable, Equatable {
 /// ```
 public struct ProjectManager {
 
-    private static let projectsDir = ".pry/projects"
-    private static let activeFile = ".pry/active-project"
+    private static var projectsDir: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.projectsDir
+    }
+    private static var activeFile: String { StoragePaths.activeProjectFile }
 
     // MARK: - Project CRUD
 
