@@ -1,10 +1,14 @@
 import Foundation
+#if canImport(Compression)
 import Compression
+#endif
 
 /// Decompresses HTTP response bodies for display purposes.
-/// Supports gzip and deflate. Brotli (br) is not supported.
+/// Supports gzip and deflate on Apple platforms. Brotli (br) is not supported.
+/// On Linux (no Compression framework) returns nil — callers fall back to raw bytes.
 public enum BodyDecompressor {
     public static func decompress(_ data: Data, encoding: String?) -> Data? {
+        #if canImport(Compression)
         guard let enc = encoding?.lowercased().trimmingCharacters(in: .whitespaces) else { return nil }
         if enc == "gzip" || enc == "x-gzip" {
             return inflateGzip(data)
@@ -13,7 +17,12 @@ public enum BodyDecompressor {
             return inflateRaw(data) ?? inflateZlib(data)
         }
         return nil
+        #else
+        return nil
+        #endif
     }
+
+    #if canImport(Compression)
 
     /// gzip frame: 10-byte header (with optional extras) + raw deflate + 8-byte trailer.
     private static func inflateGzip(_ data: Data) -> Data? {
@@ -79,4 +88,5 @@ public enum BodyDecompressor {
         let payload = data.subdata(in: 2..<data.count)
         return inflateRaw(payload)
     }
+    #endif
 }
