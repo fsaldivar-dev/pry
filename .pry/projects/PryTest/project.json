@@ -1,0 +1,14 @@
+{
+  "createdAt" : "2026-04-14T19:21:37Z",
+  "name" : "PryTest",
+  "tracking" : {
+    "autoDetect" : true,
+    "domains" : [
+      "httpbin.org"
+    ],
+    "mode" : "domain",
+    "userAgents" : [
+      "SimulationPry\/1.0"
+    ]
+  }
+}

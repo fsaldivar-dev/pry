@@ -1,0 +1,17 @@
+{
+  "name": "Login",
+  "watchlist": [],
+  "mocks": [
+    {"id":"1","method":"GET","pattern":"/get","host":"httpbin.org","status":200,"body":"{\"Message\":\"Hello Fran\"}","isEnabled":true},
+    {"id":"2","method":"POST","pattern":"/post","host":"httpbin.org","status":200,"body":"{\"status\":\"created\"}","isEnabled":true},
+    {"id":"3","method":"PUT","pattern":"/put","host":"httpbin.org","status":200,"body":"{\"status\":\"updated\"}","isEnabled":true},
+    {"id":"4","method":"DELETE","pattern":"/delete","host":"httpbin.org","status":200,"body":"{\"status\":\"deleted\"}","isEnabled":true}
+  ],
+  "headers": [],
+  "mapLocal": [],
+  "mapRemote": [],
+  "dns": [],
+  "breakpoints": [],
+  "blocklist": [],
+  "rules": ""
+}

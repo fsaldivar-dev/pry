@@ -1,0 +1,14 @@
+{
+  "createdAt" : "2026-04-14T23:52:24Z",
+  "name" : "projB",
+  "tracking" : {
+    "autoDetect" : true,
+    "domains" : [
+      "b.example.com"
+    ],
+    "mode" : "domain",
+    "userAgents" : [
+
+    ]
+  }
+}
