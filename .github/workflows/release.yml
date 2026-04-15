@@ -162,22 +162,24 @@ jobs:
         if: steps.bump.outputs.type != 'skip'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.next }}
+          REPO: ${{ github.repository }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          VERSION="${{ steps.version.outputs.next }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_BODY="${{ github.event.pull_request.body }}"
+          CHECKSUMS=$(cat checksums.txt)
 
-          gh release create "$VERSION" \
-            --title "$VERSION — $PR_TITLE" \
-            --notes "## Changes
+          # Write release notes to a file to avoid shell interpretation of PR body
+          cat > release-notes.md << EOF
+          ## Changes
 
-          $PR_BODY
+          ${PR_BODY}
 
           ## Installation
 
           ### CLI
           \`\`\`bash
-          curl -L https://github.com/${{ github.repository }}/releases/download/${VERSION}/pry-universal -o pry
+          curl -L https://github.com/${REPO}/releases/download/${VERSION}/pry-universal -o pry
           chmod +x pry
           sudo mv pry /usr/local/bin/
           \`\`\`
@@ -189,8 +191,13 @@ jobs:
 
           ## Checksums
           \`\`\`
-          $(cat checksums.txt)
-          \`\`\`" \
+          ${CHECKSUMS}
+          \`\`\`
+          EOF
+
+          gh release create "$VERSION" \
+            --title "$VERSION — $PR_TITLE" \
+            --notes-file release-notes.md \
             pry-universal PryApp.zip checksums.txt
 
       - name: Create labels if missing
