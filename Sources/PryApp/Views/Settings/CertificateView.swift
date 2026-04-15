@@ -7,6 +7,8 @@ struct CertificateView: View {
     @State private var caExists = false
     @State private var trustStatus = "Checking..."
     @State private var isCheckingTrust = false
+    @State private var isTrusting = false
+    @State private var trustError: String?
 
     var body: some View {
         Form {
@@ -36,6 +38,32 @@ struct CertificateView: View {
 
             Section("Actions") {
                 if caExists {
+                    // One-click trust button
+                    HStack {
+                        Button {
+                            trustCA()
+                        } label: {
+                            HStack(spacing: 6) {
+                                if isTrusting {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                }
+                                Text(trustStatus == "Trusted" ? "Revoke Trust" : "Trust Certificate")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(trustStatus == "Trusted" ? .red : .green)
+                        .disabled(isTrusting)
+                    }
+
+                    if let err = trustError {
+                        Text(err)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
+                    Divider()
+
                     Button("Reveal in Finder") {
                         NSWorkspace.shared.selectFile(
                             CertificateAuthority.caCertPath,
@@ -58,14 +86,11 @@ struct CertificateView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("For HTTPS interception, the CA must be trusted:")
                         .font(.caption)
-                    Text("1. Open Keychain Access")
+                    Text("• Click \"Trust Certificate\" above (may prompt for admin password)")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("2. Drag the pry-ca.pem file into the System keychain")
+                    Text("• Or manually: Keychain Access → drag pry-ca.pem → Always Trust")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("3. Double-click the certificate → Trust → Always Trust")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("")
-                    Text("For iOS Simulator: run `pry trust` in Terminal")
+                    Text("• For iOS Simulator: run `pry trust` in Terminal")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -84,7 +109,7 @@ struct CertificateView: View {
     }
 
     private func checkTrustStatus() {
-        // Check if CA is in the trusted certs via security CLI
+        isCheckingTrust = true
         Task.detached {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
@@ -97,6 +122,60 @@ struct CertificateView: View {
             let status = process.terminationStatus == 0 ? "Trusted" : "Not Trusted"
             await MainActor.run {
                 trustStatus = status
+                isCheckingTrust = false
+            }
+        }
+    }
+
+    private func trustCA() {
+        isTrusting = true
+        trustError = nil
+        let caPath = CertificateAuthority.caCertPath
+        Task.detached {
+            // Attempt 1: System keychain (requires admin — triggers macOS auth dialog)
+            let sys = Process()
+            sys.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+            sys.arguments = ["add-trusted-cert", "-d", "-r", "trustRoot",
+                             "-k", "/Library/Keychains/System.keychain", caPath]
+            sys.standardOutput = Pipe()
+            sys.standardError = Pipe()
+            try? sys.run()
+            sys.waitUntilExit()
+
+            if sys.terminationStatus == 0 {
+                await MainActor.run {
+                    isTrusting = false
+                    trustStatus = "Trusted"
+                }
+                return
+            }
+
+            // Fallback: user login keychain (no admin required)
+            let loginKeychain = NSString(string: "~/Library/Keychains/login.keychain-db")
+                .expandingTildeInPath
+            let user = Process()
+            user.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+            user.arguments = ["add-trusted-cert", "-r", "trustRoot",
+                              "-k", loginKeychain, caPath]
+            user.standardOutput = Pipe()
+            let errPipe = Pipe()
+            user.standardError = errPipe
+            try? user.run()
+            user.waitUntilExit()
+
+            let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            let errMsg = String(data: errData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            await MainActor.run {
+                isTrusting = false
+                if user.terminationStatus == 0 {
+                    trustStatus = "Trusted"
+                } else {
+                    let msg = errMsg?.isEmpty == false ? errMsg : "Failed to trust certificate"
+                    trustError = msg
+                    checkTrustStatus()
+                }
             }
         }
     }

@@ -44,7 +44,7 @@ struct RawTabView: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
-                        .background(Color(nsColor: .textBackgroundColor))
+                        .background(PryTheme.bgPanel)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
 
@@ -57,7 +57,7 @@ struct RawTabView: View {
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(8)
-                            .background(Color(nsColor: .textBackgroundColor))
+                            .background(PryTheme.bgPanel)
                             .clipShape(RoundedRectangle(cornerRadius: 4))
                     } else {
                         Text("Waiting for response...")

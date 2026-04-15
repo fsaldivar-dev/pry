@@ -71,7 +71,7 @@ struct JSONSyntaxView: View {
             // Key in blue
             if let r = Range(match.range(at: 2), in: line) {
                 var key = AttributedString("\"\(line[r])\"")
-                key.foregroundColor = .blue
+                key.foregroundColor = PryTheme.jsonKey
                 result.append(key)
             }
             // Colon
@@ -102,19 +102,19 @@ struct JSONSyntaxView: View {
         if stripped.hasPrefix("\"") {
             // String value — green
             attr = AttributedString(stripped)
-            attr.foregroundColor = .green
+            attr.foregroundColor = PryTheme.jsonString
         } else if stripped == "true" || stripped == "false" {
-            // Boolean — purple
+            // Boolean
             attr = AttributedString(stripped)
-            attr.foregroundColor = .purple
+            attr.foregroundColor = PryTheme.jsonBool
         } else if stripped == "null" {
-            // Null — gray
+            // Null
             attr = AttributedString(stripped)
-            attr.foregroundColor = .gray
+            attr.foregroundColor = PryTheme.jsonNull
         } else if Double(stripped) != nil {
-            // Number — orange
+            // Number
             attr = AttributedString(stripped)
-            attr.foregroundColor = .orange
+            attr.foregroundColor = PryTheme.jsonNumber
         } else {
             // Structural ({, }, [, ])
             attr = AttributedString(stripped)

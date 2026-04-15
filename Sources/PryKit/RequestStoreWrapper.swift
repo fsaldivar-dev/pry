@@ -10,6 +10,14 @@ public enum SourceFilter: Hashable, Sendable {
     case host(app: String, host: String)
 }
 
+/// Filter requests by mock/real origin.
+@available(macOS 14, *)
+public enum MockSourceFilter: String, CaseIterable, Sendable {
+    case all = "All"
+    case mocked = "Mocked"
+    case real = "Real"
+}
+
 /// @Observable bridge over RequestStore for SwiftUI.
 ///
 /// Debounces updates from PryLib's RequestStore into the MainActor,
@@ -34,6 +42,9 @@ public final class RequestStoreWrapper {
         didSet { invalidateFilterCache() }
     }
     public var filterStatus: ClosedRange<UInt>? {
+        didSet { invalidateFilterCache() }
+    }
+    public var filterMockSource: MockSourceFilter = .all {
         didSet { invalidateFilterCache() }
     }
 
@@ -80,6 +91,14 @@ public final class RequestStoreWrapper {
                 return range.contains(code)
             }
         }
+        switch filterMockSource {
+        case .all:
+            break
+        case .mocked:
+            result = result.filter { $0.isMock }
+        case .real:
+            result = result.filter { !$0.isMock }
+        }
         if !filterText.isEmpty {
             let lower = filterText.lowercased()
             result = result.filter {
@@ -88,6 +107,16 @@ public final class RequestStoreWrapper {
             }
         }
         return result
+    }
+
+    // MARK: - Public actions
+
+    /// Clear all captured requests and reset selection.
+    public func clear() {
+        store.clear()
+        requests = []
+        selectedRequest = nil
+        invalidateFilterCache()
     }
 
     // MARK: - Init

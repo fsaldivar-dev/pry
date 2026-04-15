@@ -27,6 +27,12 @@ public final class ProxyServer {
         let mocks = Config.loadMocks()
         let ca = self.ca
 
+        // Load legacy mocks from /tmp/pry.mocks into MockEngine
+        for (path, body) in mocks {
+            let mock = UnifiedMock(pattern: path, body: body, source: .loose)
+            MockEngine.shared.addLooseMock(mock)
+        }
+
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(ChannelOptions.backlog, value: 256)
             .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)

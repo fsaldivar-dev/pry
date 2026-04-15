@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/franciscojaviersaldivarrubio/Documents/fsladivarDev/pry/**)",
+      "Bash(gh issue:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(swift build:*)"
+    ]
+  }
+}

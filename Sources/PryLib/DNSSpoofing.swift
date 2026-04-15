@@ -1,7 +1,10 @@
 import Foundation
 
 public struct DNSSpoofing {
-    public static let dnsFile = "/tmp/pry.dns"
+    public static var dnsFile: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.dnsFile
+    }
 
     public struct DNSRule {
         public let domain: String

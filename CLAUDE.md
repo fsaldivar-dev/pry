@@ -151,6 +151,28 @@ pry throttle PRESET         # Throttling: 3g, slow, edge, wifi, off
 pry throttle --bandwidth KB --latency MS  # Throttling custom
 pry rules load FILE         # Cargar archivo .pryrules
 pry rules [clear]           # Lista/limpia reglas de scripting
+pry scenario use NAME       # Activa un escenario
+pry scenario off            # Desactiva escenario actual
+pry scenario list           # Lista escenarios
+pry scenario create NAME    # Crea escenario vacío
+pry scenario delete NAME    # Elimina escenario
+pry scenario show NAME      # Muestra JSON del escenario
+pry scenario capture NAME   # Captura config actual como escenario
+pry override PATTERN CODE   # Override de status code
+pry overrides [clear]       # Lista/limpia overrides
+pry project init            # Inicializa .pry/mocking/
+pry project list            # Lista mocks del proyecto
+pry project apply           # Aplica mocks del proyecto al proxy
+pry project clear           # Limpia mocks del proyecto
+pry record start NAME       # Empieza a grabar tráfico
+pry record stop             # Para y guarda grabación
+pry record list             # Lista grabaciones
+pry record show NAME        # Muestra detalles de grabación
+pry record delete NAME      # Elimina grabación
+pry record to-mocks NAME    # Convierte grabación en mocks
+pry export scenario NAME    # Exporta escenario a .pryscenario
+pry import scenario FILE    # Importa escenario desde archivo
+pry device                  # Inicia servidor de setup para dispositivos
 ```
 
 ### Flags
