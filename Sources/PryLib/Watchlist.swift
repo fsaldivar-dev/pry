@@ -1,7 +1,10 @@
 import Foundation
 
 public struct Watchlist {
-    public static let watchFile = ".prywatch"
+    public static var watchFile: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.watchFile
+    }
 
     public static func load() -> Set<String> {
         var domains = Set<String>()

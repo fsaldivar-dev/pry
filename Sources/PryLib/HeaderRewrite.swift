@@ -1,7 +1,10 @@
 import Foundation
 
 public struct HeaderRewrite {
-    public static let headersFile = "/tmp/pry.headers"
+    public static var headersFile: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.headersFile
+    }
 
     public enum Action: String {
         case add
