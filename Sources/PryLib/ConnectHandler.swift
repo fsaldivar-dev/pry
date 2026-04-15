@@ -656,8 +656,20 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
         responseSent = true
 
         if let body = responseBody {
-            BodyPrinter.printResponseBody(body, contentType: contentType)
-            var buf = body
+            // Decompress for display/storage if Content-Encoding indicates compression.
+            // Original compressed bytes are still forwarded to the client unchanged below.
+            let contentEncoding = head.headers["Content-Encoding"].first
+            var displayBuf = body
+            if let enc = contentEncoding {
+                var raw = body
+                if let bytes = raw.readBytes(length: raw.readableBytes),
+                   let inflated = BodyDecompressor.decompress(Data(bytes), encoding: enc) {
+                    displayBuf = context.channel.allocator.buffer(capacity: inflated.count)
+                    displayBuf.writeBytes(inflated)
+                }
+            }
+            BodyPrinter.printResponseBody(displayBuf, contentType: contentType)
+            var buf = displayBuf
             let bodyStr = buf.readString(length: buf.readableBytes)
             BodyPrinter.storeResponse(requestId: requestId, statusCode: UInt(head.status.code),
                 headers: head.headers.map { ($0.name, $0.value) }, body: bodyStr)
