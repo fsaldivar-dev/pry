@@ -1,0 +1,34 @@
+{
+  "blocklist" : [
+
+  ],
+  "breakpoints" : [
+
+  ],
+  "dns" : [
+
+  ],
+  "headers" : [
+
+  ],
+  "mapLocal" : [
+
+  ],
+  "mapRemote" : [
+
+  ],
+  "mocks" : [
+    {
+      "body" : "{}",
+      "id" : "4649B334-27F7-4BF6-88D8-7EFAB8883088",
+      "isEnabled" : true,
+      "pattern" : "\/api\/x",
+      "status" : 200
+    }
+  ],
+  "name" : "source",
+  "rules" : "",
+  "watchlist" : [
+
+  ]
+}
