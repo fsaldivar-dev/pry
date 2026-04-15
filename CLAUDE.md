@@ -7,6 +7,37 @@
 - Proxy HTTP/HTTPS selectivo — no rompe apps que no le pidas interceptar
 - Documentacion en español, estilo libro tecnico
 
+## Arquitectura PryApp (GUI) — ADR-006
+
+La GUI de macOS sigue una arquitectura nueva documentada en [docs/ADR-006-new-architecture-desktop-app.md](./docs/ADR-006-new-architecture-desktop-app.md). Tres conceptos:
+
+1. **Interceptor** (`Sources/PryApp/Core/Interceptor.swift`) — features que mutan el flow del proxy (Block, Mock, Breakpoint, etc.). Implementan un protocolo único ordenado por `Phase`.
+2. **EventBus** (`Sources/PryApp/Core/EventBus.swift`) — observers consumen `AsyncStream<Event>` sin mutar el flow (UI, Recorder, métricas).
+3. **FeatureStore** (`Sources/PryApp/Features/<X>/<X>Store.swift`) — un `@Observable @MainActor` por feature que combina repo + viewmodel.
+
+**Scope**: sólo PryApp. CLI y TUI siguen usando singletons legacy — NO tocar.
+
+**Coexistencia**: GUI y CLI/TUI comparten archivos en `~/.pry/` via `StoragePaths`. Nunca corren simultáneamente.
+
+### TDD obligatorio para features nuevas
+
+Todo código nuevo bajo `Sources/PryApp/Features/` sigue RED → GREEN → REFACTOR:
+
+1. Escribir el(los) test(s) fallando primero (`Tests/PryAppTests/Features/<X>/`)
+2. Correr `swift test --filter <X>` → confirmar **RED**
+3. Implementar lo mínimo para pasar → **GREEN**
+4. Refactorizar manteniendo GREEN
+
+Los tests **nunca** tocan `~/.pry/` real — usan temp dirs y fakes (`InMemoryEventBus`, etc.).
+
+### Tooling de workflow
+
+- **`/new-feature <Name>`** — scaffoldea folder completo (Store + Interceptor + View + tests) en estado RED. Ver `.claude/skills/new-feature/SKILL.md`.
+- **`/tdd <qué>`** — pair programming RED-GREEN-REFACTOR dentro de una feature existente. Ver `.claude/skills/tdd/SKILL.md`.
+- **`arch-reviewer` agent** — antes de abrir PR, correr `Agent({ subagent_type: "arch-reviewer" })` para validar contra las reglas del ADR. Ver `.claude/agents/arch-reviewer.md`.
+
+Estos tres refuerzan las reglas de arquitectura + TDD automáticamente. Úsalos.
+
 ## Stack
 
 - **CLI**: Swift 5.9+, macOS 13+, SPM
