@@ -202,9 +202,10 @@ jobs:
 
       - name: Create labels if missing
         if: steps.bump.outputs.type != 'skip'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh label create major --color D93F0B --description "Major version bump" --force
-          gh label create minor --color 0E8A16 --description "Minor version bump" --force
-          gh label create patch --color 1D76DB --description "Patch version bump" --force
+          gh label create major --color D93F0B --description "Major version bump" --force || true
+          gh label create minor --color 0E8A16 --description "Minor version bump" --force || true
+          gh label create patch --color 1D76DB --description "Patch version bump" --force || true
