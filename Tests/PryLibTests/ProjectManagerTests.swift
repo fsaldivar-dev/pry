@@ -2,10 +2,12 @@ import XCTest
 @testable import PryLib
 
 final class ProjectManagerTests: XCTestCase {
+    // Test project names — only these are cleaned up (never delete user projects)
+    private let testProjectNames = ["test-project", "alpha", "beta", "to-delete", "proj", "proj-a", "proj-b", "nope"]
+
     override func setUp() {
         super.setUp()
-        // Clean up projects
-        for name in ProjectManager.list() {
+        for name in testProjectNames {
             ProjectManager.delete(name: name)
         }
         ProjectManager.deactivate()
@@ -13,7 +15,7 @@ final class ProjectManagerTests: XCTestCase {
     }
 
     override func tearDown() {
-        for name in ProjectManager.list() {
+        for name in testProjectNames {
             ProjectManager.delete(name: name)
         }
         ProjectManager.deactivate()
@@ -31,7 +33,13 @@ final class ProjectManagerTests: XCTestCase {
     func testListProjects() throws {
         try ProjectManager.create(name: "beta")
         try ProjectManager.create(name: "alpha")
-        XCTAssertEqual(ProjectManager.list(), ["alpha", "beta"])
+        let list = ProjectManager.list()
+        XCTAssertTrue(list.contains("alpha"))
+        XCTAssertTrue(list.contains("beta"))
+        // Verify sorted order
+        if let a = list.firstIndex(of: "alpha"), let b = list.firstIndex(of: "beta") {
+            XCTAssertTrue(a < b)
+        }
     }
 
     func testDeleteProject() throws {
