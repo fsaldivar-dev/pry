@@ -71,8 +71,11 @@ public struct Scenario: Codable, Equatable {
 /// Manages scenario CRUD and activation. Scenarios are stored as JSON in .pry/scenarios/.
 public struct ScenarioManager {
 
-    private static let scenariosDir = ".pry/scenarios"
-    private static let activeFile = ".pry/active-scenario"
+    private static var scenariosDir: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.scenariosDir
+    }
+    private static var activeFile: String { StoragePaths.activeScenarioFile }
 
     // MARK: - CRUD
 

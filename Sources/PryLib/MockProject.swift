@@ -47,7 +47,10 @@ public struct ProjectMock: Codable, Equatable {
 /// Coexists with loose mocks (pry mock). Project mocks are persistent and versionable.
 public struct MockProject {
 
-    private static let mockingDir = ".pry/mocking"
+    private static var mockingDir: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.mockingDir
+    }
 
     /// Initialize the mocking project directory.
     public static func initProject() throws {

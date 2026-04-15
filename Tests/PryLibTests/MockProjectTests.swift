@@ -18,7 +18,7 @@ final class MockProjectTests: XCTestCase {
 
     func testInitProject() throws {
         try MockProject.initProject()
-        XCTAssertTrue(FileManager.default.fileExists(atPath: ".pry/mocking"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: StoragePaths.mockingDir))
     }
 
     func testSaveAndLoad() throws {

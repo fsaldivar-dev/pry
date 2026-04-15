@@ -1,10 +1,13 @@
 import Foundation
 
 public struct Config {
-    public static let configFile = ".pryconfig"
-    public static let logFile = "/tmp/pry.log"
-    public static let pidFile = "/tmp/pry.pid"
-    public static let mockFile = "/tmp/pry.mocks"
+    public static var configFile: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.configFile
+    }
+    public static var logFile: String { StoragePaths.logFile }
+    public static var pidFile: String { StoragePaths.pidFile }
+    public static var mockFile: String { StoragePaths.mockFile }
     public static let defaultPort = 8080
 
     public static func readAll() -> [String: String] {
