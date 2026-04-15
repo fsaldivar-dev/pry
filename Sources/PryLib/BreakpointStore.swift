@@ -7,7 +7,10 @@ public class BreakpointStore {
     private let queue = DispatchQueue(label: "pry.breakpoints")
     private var patterns: [String] = []
 
-    private static let breakpointsFile = "/tmp/pry.breakpoints"
+    private static var breakpointsFile: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.breakpointsFile
+    }
 
     init() {
         load()

@@ -7,3 +7,6 @@ build/
 .prywatch
 .pryconfig
 /tmp/pry.*
+
+# Pry runtime data
+.pry/

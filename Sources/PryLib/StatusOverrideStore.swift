@@ -3,7 +3,10 @@ import Foundation
 /// Manages status code overrides. Quick way to simulate error responses without full mocks.
 /// Stored in /tmp/pry.overrides as pattern\tstatus per line.
 public struct StatusOverrideStore {
-    public static let file = "/tmp/pry.overrides"
+    public static var file: String {
+        StoragePaths.ensureRoot()
+        return StoragePaths.overridesFile
+    }
 
     public struct Override {
         public let pattern: String

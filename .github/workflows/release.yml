@@ -118,6 +118,26 @@ jobs:
           cp PryApp-universal "$APP/Contents/MacOS/PryApp"
           chmod +x "$APP/Contents/MacOS/PryApp"
 
+          # Generate .icns from assets/logo.png
+          if [ -f assets/logo.png ]; then
+            mkdir -p PryApp.iconset
+            sips -z 16 16     assets/logo.png --out PryApp.iconset/icon_16x16.png > /dev/null
+            sips -z 32 32     assets/logo.png --out PryApp.iconset/icon_16x16@2x.png > /dev/null
+            sips -z 32 32     assets/logo.png --out PryApp.iconset/icon_32x32.png > /dev/null
+            sips -z 64 64     assets/logo.png --out PryApp.iconset/icon_32x32@2x.png > /dev/null
+            sips -z 128 128   assets/logo.png --out PryApp.iconset/icon_128x128.png > /dev/null
+            sips -z 256 256   assets/logo.png --out PryApp.iconset/icon_128x128@2x.png > /dev/null
+            sips -z 256 256   assets/logo.png --out PryApp.iconset/icon_256x256.png > /dev/null
+            sips -z 512 512   assets/logo.png --out PryApp.iconset/icon_256x256@2x.png > /dev/null
+            sips -z 512 512   assets/logo.png --out PryApp.iconset/icon_512x512.png > /dev/null
+            cp assets/logo.png PryApp.iconset/icon_512x512@2x.png
+            iconutil -c icns PryApp.iconset -o "$APP/Contents/Resources/AppIcon.icns"
+            rm -rf PryApp.iconset
+            echo "Icon generated and added to bundle"
+          else
+            echo "Warning: assets/logo.png not found, building without icon"
+          fi
+
           # Create Info.plist
           cat > "$APP/Contents/Info.plist" << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
@@ -138,6 +158,8 @@ jobs:
             <string>${VERSION_SHORT}</string>
             <key>CFBundlePackageType</key>
             <string>APPL</string>
+            <key>CFBundleIconFile</key>
+            <string>AppIcon</string>
             <key>LSMinimumSystemVersion</key>
             <string>14.0</string>
             <key>NSHighResolutionCapable</key>
@@ -202,9 +224,10 @@ jobs:
 
       - name: Create labels if missing
         if: steps.bump.outputs.type != 'skip'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh label create major --color D93F0B --description "Major version bump" --force
-          gh label create minor --color 0E8A16 --description "Minor version bump" --force
-          gh label create patch --color 1D76DB --description "Patch version bump" --force
+          gh label create major --color D93F0B --description "Major version bump" --force || true
+          gh label create minor --color 0E8A16 --description "Minor version bump" --force || true
+          gh label create patch --color 1D76DB --description "Patch version bump" --force || true
