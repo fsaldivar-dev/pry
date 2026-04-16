@@ -14,8 +14,8 @@ struct BlocksView: View {
             HStack {
                 TextField("domain.com o *.domain.com", text: $newDomain)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit(addCurrent)
-                Button("Add", action: addCurrent)
+                    .onSubmit { addCurrent() }
+                Button("Add") { addCurrent() }
                     .disabled(newDomain.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding()
@@ -64,18 +64,24 @@ struct BlocksView: View {
     }
 }
 
-#Preview("empty") {
-    if #available(macOS 14, *) {
-        BlocksView()
-            .environment(AppCore.preview())
-            .frame(width: 400, height: 400)
-    }
-}
+// Previews usan el estilo viejo (PreviewProvider) porque el macro `#Preview` no
+// soporta `@available` y el package apunta a macOS 13 para mantener compatibilidad
+// con la CLI. Los PreviewProviders permiten gating por availability de forma limpia.
+@available(macOS 14, *)
+struct BlocksView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            BlocksView()
+                .environment(AppCore.preview())
+                .previewDisplayName("empty")
 
-#Preview("with data") {
-    if #available(macOS 14, *) {
-        BlocksView()
-            .environment(AppCore.previewWithBlockedDomains(["ads.tracker.com", "*.analytics.com"]))
-            .frame(width: 400, height: 400)
+            BlocksView()
+                .environment(AppCore.previewWithBlockedDomains([
+                    "ads.tracker.com",
+                    "*.analytics.com"
+                ]))
+                .previewDisplayName("with data")
+        }
+        .frame(width: 400, height: 400)
     }
 }
