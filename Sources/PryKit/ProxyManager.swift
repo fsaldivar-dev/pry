@@ -12,6 +12,10 @@ public final class ProxyManager {
     public var requestCount: Int = 0
     public var domains: [String] = []
     public var systemProxyEnabled = false
+    /// Mensaje efímero a mostrar como banner en la GUI (toasts de acción).
+    /// Se setea tras operaciones que requieren que el usuario entienda el efecto
+    /// (ej. agregar dominio al watchlist con proxy corriendo). La UI limpia después de mostrarlo.
+    public var statusBanner: String?
 
     private let serverBox = ServerBox()
 
@@ -54,9 +58,36 @@ public final class ProxyManager {
         domains = Watchlist.load().sorted()
     }
 
+    /// Agrega un dominio al watchlist. Si el proxy está corriendo + system proxy activo,
+    /// hace un toggle breve del system proxy para forzar que los clientes (browsers, apps)
+    /// tiren sus conexiones HTTPS keep-alive existentes y re-establezcan nuevas conexiones
+    /// que van a pasar por `ConnectHandler` con la decisión `shouldIntercept` actualizada.
+    ///
+    /// Sin este toggle, las conexiones TCP ya-vivas al host recién agregado siguen
+    /// tunneling sin interceptar hasta que el cliente las cierre naturalmente — lo que
+    /// forzaba a los usuarios a hacer Stop/Start del proxy manualmente.
     public func addDomain(_ domain: String) {
         Watchlist.add(domain)
         reloadDomains()
+        if isRunning && systemProxyEnabled {
+            forceProxyReconnect()
+            statusBanner = "Dominio agregado: \(domain). Si no ves HTTPS en segundos, hacé una nueva request o reiniciá el cliente."
+        }
+    }
+
+    /// Toggle breve del system proxy para forzar a los clientes a tirar sus conexiones
+    /// keep-alive. La pausa de ~150ms es suficiente para que `networksetup` notifique
+    /// el cambio a nivel OS sin alcanzar a que las apps fallen requests en curso.
+    private func forceProxyReconnect() {
+        SystemProxy.disable()
+        // Pequeña pausa síncrona para que la notificación llegue antes de re-enable.
+        usleep(150_000)
+        SystemProxy.enable(port: port)
+    }
+
+    /// Limpia el banner de estado (llamado por la UI tras mostrarlo).
+    public func dismissStatusBanner() {
+        statusBanner = nil
     }
 
     public func removeDomain(_ domain: String) {
