@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import PryLib
 
 /// Composition root de la arquitectura nueva de PryApp (ADR-006).
 ///
@@ -27,19 +28,40 @@ public final class AppCore {
     /// al construirse el AppCore.
     public let interceptors: InterceptorRegistry
 
+    // MARK: - Feature stores
+
+    /// Feature Blocking: lista de dominios bloqueados con matching + wildcards.
+    public let blocks: BlockStore
+
     public init() {
-        self.bus = EventBus()
+        let bus = EventBus()
+        self.bus = bus
         self.interceptors = InterceptorRegistry()
-        // Los stores de feature se agregan en milestones siguientes.
-        // Ejemplo futuro (Paso 2):
-        //   self.blocks = BlockStore(bus: bus)
-        //   Task { await interceptors.register(BlockInterceptor(store: blocks)) }
+
+        // Stores de feature — AppCore concentra la dependencia a PryLib (StoragePaths)
+        // y los Stores reciben el path ya resuelto. Esto cumple el layering del ADR-006:
+        // ninguna feature importa PryLib directamente.
+        StoragePaths.ensureRoot()
+        self.blocks = BlockStore(storagePath: StoragePaths.blocksFile, bus: bus)
+
+        // Registrar interceptors en la chain.
+        let interceptors = self.interceptors
+        let blocks = self.blocks
+        Task { await interceptors.register(BlockInterceptor(store: blocks)) }
     }
 
     /// Factory para `#Preview`. Genera un `AppCore` aislado sin efectos reales.
-    /// Cada feature puede proveer su propio seed via extension.
     @available(macOS 14, *)
     public static func preview() -> AppCore {
         AppCore()
+    }
+
+    /// Factory de preview con `BlockStore` pre-poblado (útil para #Preview "with data").
+    /// Usa un path temporal único para no contaminar `~/.pry/blocklist` real.
+    @available(macOS 14, *)
+    public static func previewWithBlockedDomains(_ domains: [String]) -> AppCore {
+        let core = AppCore()
+        for d in domains { core.blocks.add(d) }
+        return core
     }
 }

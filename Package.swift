@@ -52,6 +52,11 @@ targets += [
         dependencies: ["PryKit"],
         path: "Tests/PryKitTests"
     ),
+    .testTarget(
+        name: "PryAppTests",
+        dependencies: ["PryApp"],
+        path: "Tests/PryAppTests"
+    ),
 ]
 products += [
     .library(name: "PryKit", targets: ["PryKit"]),
