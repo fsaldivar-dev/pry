@@ -27,6 +27,12 @@ struct MainWindow: View {
                 RecorderBannerView()
             }
 
+            if let message = proxy.statusBanner {
+                StatusBannerView(message: message) {
+                    proxy.dismissStatusBanner()
+                }
+            }
+
             if store.requests.isEmpty {
                 VStack(spacing: 16) {
                     Spacer()
