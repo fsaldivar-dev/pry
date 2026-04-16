@@ -56,6 +56,7 @@ struct BlocksView: View {
         .navigationTitle("Blocking")
     }
 
+    @MainActor
     private func addCurrent() {
         let trimmed = newDomain.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
