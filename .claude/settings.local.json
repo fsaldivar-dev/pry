@@ -5,7 +5,9 @@
       "Bash(gh issue:*)",
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
-      "Bash(swift build:*)"
+      "Bash(swift build:*)",
+      "Bash(git checkout:*)",
+      "Bash(swift test:*)"
     ]
   }
 }
