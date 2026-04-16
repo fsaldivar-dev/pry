@@ -13,6 +13,7 @@ struct MainWindow: View {
     @State private var showBreakpoints = false
     @State private var showRules = false
     @State private var showDeviceSetup = false
+    @State private var showBlocking = false
     @State private var sidebarWidth: CGFloat = 220
     @State private var detailHeight: CGFloat = 280
     @State private var showSidebar = true
@@ -134,9 +135,18 @@ struct MainWindow: View {
                     Text("Device")
                 }
             }
+            ToolbarItem(placement: .automatic) {
+                Button { showBlocking.toggle() } label: {
+                    Image(systemName: "shield.fill")
+                    Text("Blocking")
+                }
+            }
         }
         .sheet(isPresented: $showMocking) {
             UnifiedMockView().frame(minWidth: 800, minHeight: 500)
+        }
+        .sheet(isPresented: $showBlocking) {
+            BlocksView().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showBreakpoints) {
             BreakpointListView().frame(minWidth: 500, minHeight: 400)
