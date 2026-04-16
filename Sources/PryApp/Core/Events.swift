@@ -89,3 +89,16 @@ public struct TunnelClosedEvent: PryEvent {
         self.closedAt = closedAt
     }
 }
+
+// MARK: - Feature-specific events
+
+/// Emitido cuando la lista de dominios bloqueados cambia (add/remove/clear).
+/// Consumers: UI de otras features, futuro Recorder, métricas, etc.
+public struct BlockListChangedEvent: PryEvent {
+    public let domains: [String]
+    public let changedAt: Date
+    public init(domains: [String], changedAt: Date = Date()) {
+        self.domains = domains
+        self.changedAt = changedAt
+    }
+}
