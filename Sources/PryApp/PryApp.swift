@@ -14,6 +14,10 @@ struct PryApp: App {
     @State private var breakpointManager = BreakpointUIManager()
     @State private var recorderManager = RecorderUIManager()
     @State private var projectUIManager = ProjectUIManager()
+    /// Composition root de la arquitectura nueva (ADR-006). Convive con los
+    /// managers legacy durante la migración — cada feature migra uno por uno
+    /// y los managers legacy se retiran cuando se queden sin consumers.
+    @State private var core = AppCore()
 
     var body: some Scene {
         WindowGroup {
@@ -24,6 +28,7 @@ struct PryApp: App {
                 .environment(breakpointManager)
                 .environment(recorderManager)
                 .environment(projectUIManager)
+                .environment(core)
         }
         .defaultSize(width: 1200, height: 800)
 
