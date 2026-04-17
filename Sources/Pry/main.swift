@@ -109,6 +109,24 @@ guard let command = args.first else {
     exit(0)
 }
 
+// Watchdog subprocess mode: `pry --watchdog <parent_pid>`
+// Bloquea en un loop observando al padre (PryApp). Si el padre muere de golpe
+// (SIGKILL, force-quit, crash), el watchdog restaura el system proxy para que
+// el Mac no pierda la red. Si hay un sentinel file, sale silenciosamente
+// (shutdown limpio en curso). Solo Foundation + Darwin, sin NIO.
+if command == "--watchdog" {
+    guard args.count >= 2, let parentPID = pid_t(args[1]) else {
+        fputs("Usage: pry --watchdog <parent_pid>\n", stderr)
+        exit(2)
+    }
+    fputs("[pry-watchdog] starting, watching pid \(parentPID)\n", stderr)
+    // Ignorar SIGPIPE por si stderr se cierra cuando el padre muere.
+    signal(SIGPIPE, SIG_IGN)
+    let result = Watchdog.run(parentPID: parentPID)
+    fputs("[pry-watchdog] exiting: \(result)\n", stderr)
+    exit(0)
+}
+
 // Check for orphaned proxy config on every CLI invocation
 ProxyGuard.cleanupIfNeeded()
 
