@@ -116,3 +116,15 @@ public struct StatusOverridesChangedEvent: PryEvent {
         self.changedAt = changedAt
     }
 }
+
+/// Emitido cuando la lista de mappings de MapLocal cambia.
+/// Consumers: UI, futuras integraciones.
+/// Payload: `(pattern, filePath)` para cada mapping.
+public struct MapLocalChangedEvent: PryEvent {
+    public let mappings: [(String, String)]
+    public let changedAt: Date
+    public init(mappings: [(String, String)], changedAt: Date = Date()) {
+        self.mappings = mappings
+        self.changedAt = changedAt
+    }
+}
