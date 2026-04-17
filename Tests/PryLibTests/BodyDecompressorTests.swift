@@ -54,25 +54,27 @@ final class BodyDecompressorTests: XCTestCase {
 
     // MARK: brotli
 
-    /// Brotli decompression depends on the `brotli` binary being present on PATH.
-    /// On CI runners that have it (macos-14 typically does via Homebrew) the test runs;
-    /// otherwise it's skipped rather than failing, since brotli support is best-effort.
+    /// Brotli descompresión nativa via Apple's Compression framework
+    /// (COMPRESSION_BROTLI, disponible desde macOS 12 / iOS 15).
+    /// No requiere binarios externos.
     func testBrotliDecompressesToOriginal() throws {
-        guard brotliBinaryAvailable() else {
-            throw XCTSkip("brotli binary not installed — skipping best-effort test")
-        }
+        #if !canImport(Compression)
+        throw XCTSkip("Compression framework only available on Apple platforms")
+        #else
         let data = try XCTUnwrap(Data(base64Encoded: Self.brotliB64))
         let inflated = try XCTUnwrap(BodyDecompressor.decompress(data, encoding: "br"))
         XCTAssertEqual(String(data: inflated, encoding: .utf8), Self.payload)
+        #endif
     }
 
     func testBrotliAcceptsAltSpelling() throws {
-        guard brotliBinaryAvailable() else {
-            throw XCTSkip("brotli binary not installed — skipping best-effort test")
-        }
+        #if !canImport(Compression)
+        throw XCTSkip("Compression framework only available on Apple platforms")
+        #else
         let data = try XCTUnwrap(Data(base64Encoded: Self.brotliB64))
         let inflated = try XCTUnwrap(BodyDecompressor.decompress(data, encoding: "brotli"))
         XCTAssertEqual(String(data: inflated, encoding: .utf8), Self.payload)
+        #endif
     }
 
     // MARK: unknown / malformed
@@ -95,10 +97,4 @@ final class BodyDecompressorTests: XCTestCase {
         XCTAssertFalse(BodyDecompressor.isBrotli(nil))
     }
 
-    // MARK: helpers
-
-    private func brotliBinaryAvailable() -> Bool {
-        let candidates = ["/opt/homebrew/bin/brotli", "/usr/local/bin/brotli", "/usr/bin/brotli"]
-        return candidates.contains(where: { FileManager.default.isExecutableFile(atPath: $0) })
-    }
 }

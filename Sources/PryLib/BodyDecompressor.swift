@@ -5,27 +5,16 @@ import Compression
 
 /// Decompresses HTTP response bodies for display purposes.
 ///
-/// Supported encodings:
-///   - gzip / x-gzip        via Apple's Compression framework (raw deflate + gzip frame)
-///   - deflate              via Apple's Compression framework (tries raw first, then zlib-wrapped)
-///   - br (brotli)          via subprocess to `/usr/bin/brotli` (best-effort)
+/// Supported encodings (Apple platforms via `Compression` framework):
+///   - gzip / x-gzip  — RFC 1952 gzip frame parsing + raw deflate
+///   - deflate        — raw DEFLATE first, zlib-wrapped (RFC 1950) fallback
+///   - br / brotli    — native `COMPRESSION_BROTLI` (disponible desde macOS 12 / iOS 15)
 ///
-/// Brotli strategy: Apple's Compression framework does NOT expose brotli, and vendoring a
-/// pure-Swift brotli decoder would add >100 KB of dictionary tables + decoder logic for a
-/// debugging-only code path. Instead we shell out to the system `brotli` binary with a short
-/// timeout. If the binary is missing we return nil and callers fall back to a sentinel string
-/// ("[body compressed with brotli — install `brew install brotli` to decompress]") so users
-/// see a clear message instead of garbled bytes.
-///
-/// On Linux (no Compression framework) this type returns nil for everything — callers fall
-/// back to raw bytes.
+/// Todo embedded en el binario — no requiere binarios externos ni dependencias.
+/// En Linux (sin `Compression` framework) retorna nil para todo; los callers
+/// muestran los bytes crudos.
 public enum BodyDecompressor {
-    /// Sentinel emitted by callers when brotli decompression is unavailable.
-    /// Exposed so HTTPInterceptor / ConnectHandler can use the same message.
-    public static let brotliUnavailableMessage =
-        "[body compressed with brotli — install `brew install brotli` to decompress]"
-
-    /// Returns true if the Content-Encoding value names a brotli stream.
+    /// Retorna `true` si el valor de Content-Encoding nombra un stream brotli.
     public static func isBrotli(_ encoding: String?) -> Bool {
         guard let enc = encoding?.lowercased().trimmingCharacters(in: .whitespaces) else { return false }
         return enc == "br" || enc == "brotli"
@@ -34,11 +23,10 @@ public enum BodyDecompressor {
     public static func decompress(_ data: Data, encoding: String?) -> Data? {
         guard let enc = encoding?.lowercased().trimmingCharacters(in: .whitespaces) else { return nil }
 
+        #if canImport(Compression)
         if enc == "br" || enc == "brotli" {
             return inflateBrotli(data)
         }
-
-        #if canImport(Compression)
         if enc == "gzip" || enc == "x-gzip" {
             return inflateGzip(data)
         }
@@ -51,68 +39,19 @@ public enum BodyDecompressor {
         #endif
     }
 
-    // MARK: - Brotli (subprocess)
+    #if canImport(Compression)
 
-    /// Decompress a brotli stream by piping it through `/usr/bin/brotli -d`.
-    /// Returns nil if the binary is missing, the process fails, or we time out.
-    /// This is intentionally a best-effort path — it's only used for displaying bodies
-    /// in the proxy UI, never on the wire.
-    static func inflateBrotli(_ data: Data) -> Data? {
-        #if os(macOS) || os(Linux)
-        let candidates = [
-            "/opt/homebrew/bin/brotli",
-            "/usr/local/bin/brotli",
-            "/usr/bin/brotli",
-        ]
-        guard let binary = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
-            return nil
-        }
+    // MARK: - Brotli (nativo, Compression framework)
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: binary)
-        process.arguments = ["-d", "-c"] // decode, write to stdout
-
-        let stdinPipe = Pipe()
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardInput = stdinPipe
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-
-        // Write input on a background queue so we don't deadlock if the pipe buffer fills.
-        DispatchQueue.global().async {
-            try? stdinPipe.fileHandleForWriting.write(contentsOf: data)
-            try? stdinPipe.fileHandleForWriting.close()
-        }
-
-        // 3-second timeout guard.
-        let timeoutWorkItem = DispatchWorkItem {
-            if process.isRunning { process.terminate() }
-        }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 3.0, execute: timeoutWorkItem)
-
-        let output = (try? stdoutPipe.fileHandleForReading.readToEnd()) ?? Data()
-        process.waitUntilExit()
-        timeoutWorkItem.cancel()
-
-        guard process.terminationStatus == 0, !output.isEmpty else {
-            return nil
-        }
-        return output
-        #else
-        return nil
-        #endif
+    /// Inflate usando `COMPRESSION_BROTLI` — nativo de Apple desde macOS 12 / iOS 15.
+    /// No requiere binarios externos ni dependencias.
+    private static func inflateBrotli(_ data: Data) -> Data? {
+        // Brotli suele comprimir 3-5x para JSON. 16x nos da margen holgado.
+        let initialBufferSize = max(data.count * 16, 131072)
+        return decodeOneShot(data, algorithm: COMPRESSION_BROTLI, initialBufferSize: initialBufferSize)
     }
 
-    // MARK: - gzip / deflate (Apple Compression framework)
-
-    #if canImport(Compression)
+    // MARK: - gzip / deflate
 
     /// gzip frame: 10-byte header (with optional extras) + raw deflate + 8-byte trailer.
     private static func inflateGzip(_ data: Data) -> Data? {
@@ -149,27 +88,7 @@ public enum BodyDecompressor {
     /// Raw deflate (no zlib header).
     private static func inflateRaw(_ data: Data) -> Data? {
         let bufferSize = max(data.count * 4, 65536)
-        return data.withUnsafeBytes { (inBuf: UnsafeRawBufferPointer) -> Data? in
-            guard let inBase = inBuf.bindMemory(to: UInt8.self).baseAddress else { return nil }
-            let outBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-            defer { outBuffer.deallocate() }
-
-            var result = Data()
-            var totalConsumed = 0
-            while totalConsumed < data.count {
-                let consumed = compression_decode_buffer(
-                    outBuffer, bufferSize,
-                    inBase.advanced(by: totalConsumed), data.count - totalConsumed,
-                    nil, COMPRESSION_ZLIB
-                )
-                if consumed == 0 { return result.isEmpty ? nil : result }
-                result.append(outBuffer, count: consumed)
-                // compression_decode_buffer returns bytes written, not consumed — one-shot API.
-                // For our use, one call inflates the whole stream.
-                return result
-            }
-            return result.isEmpty ? nil : result
-        }
+        return decodeOneShot(data, algorithm: COMPRESSION_ZLIB, initialBufferSize: bufferSize)
     }
 
     /// Deflate with zlib header (RFC 1950): skip 2-byte header before raw inflate.
@@ -177,6 +96,42 @@ public enum BodyDecompressor {
         guard data.count > 2 else { return nil }
         let payload = data.subdata(in: 2..<data.count)
         return inflateRaw(payload)
+    }
+
+    // MARK: - Helper compartido
+
+    /// One-shot decode vía `compression_decode_buffer`. Reintenta con buffer más grande
+    /// si el resultado llenó el output exactamente (indicativo de truncación).
+    private static func decodeOneShot(
+        _ data: Data,
+        algorithm: compression_algorithm,
+        initialBufferSize: Int
+    ) -> Data? {
+        var bufferSize = initialBufferSize
+        // Hasta 3 intentos con buffer doble si sospechamos truncación.
+        for _ in 0..<3 {
+            let result: Data? = data.withUnsafeBytes { (inBuf: UnsafeRawBufferPointer) -> Data? in
+                guard let inBase = inBuf.bindMemory(to: UInt8.self).baseAddress else { return nil }
+                let outBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+                defer { outBuffer.deallocate() }
+
+                let written = compression_decode_buffer(
+                    outBuffer, bufferSize,
+                    inBase, data.count,
+                    nil, algorithm
+                )
+                if written == 0 { return nil }
+                // Si llenó el buffer exacto, puede haber truncado — reintentar con más.
+                if written == bufferSize { return Data() } // sentinel vacío = reintentar
+                return Data(bytes: outBuffer, count: written)
+            }
+
+            if let data = result, !data.isEmpty { return data }
+            if result == nil { return nil } // fallo real del codec
+            // Truncación sospechada — reintentar con buffer doble.
+            bufferSize *= 2
+        }
+        return nil
     }
     #endif
 }

@@ -662,16 +662,10 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
             var displayBuf = body
             if let enc = contentEncoding {
                 var raw = body
-                if let bytes = raw.readBytes(length: raw.readableBytes) {
-                    if let inflated = BodyDecompressor.decompress(Data(bytes), encoding: enc) {
-                        displayBuf = context.channel.allocator.buffer(capacity: inflated.count)
-                        displayBuf.writeBytes(inflated)
-                    } else if BodyDecompressor.isBrotli(enc) {
-                        // Brotli binary unavailable — show clear message instead of garbled bytes.
-                        let msg = BodyDecompressor.brotliUnavailableMessage
-                        displayBuf = context.channel.allocator.buffer(capacity: msg.utf8.count)
-                        displayBuf.writeString(msg)
-                    }
+                if let bytes = raw.readBytes(length: raw.readableBytes),
+                   let inflated = BodyDecompressor.decompress(Data(bytes), encoding: enc) {
+                    displayBuf = context.channel.allocator.buffer(capacity: inflated.count)
+                    displayBuf.writeBytes(inflated)
                 }
             }
             BodyPrinter.printResponseBody(displayBuf, contentType: contentType)
