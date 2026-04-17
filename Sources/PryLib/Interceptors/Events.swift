@@ -9,34 +9,52 @@ public protocol PryEvent: Sendable {}
 
 // MARK: - Ciclo de vida de request
 
-/// Emitido cuando el proxy captura una request nueva (antes de procesarla por la chain).
+/// Emitido cuando el proxy captura una request — después de que la chain pasó
+/// (o decidió short-circuit), antes del forward al servidor real.
+///
+/// Payload completo incluye headers + body para soportar observers que graban
+/// el tráfico (ej. RecordingsStore). Consumers livianos (UI counters) pueden
+/// ignorar los campos pesados.
+///
+/// `requestID` es un `Int` incremental compatible con `RequestStore` legacy,
+/// permite correlación con `ResponseReceivedEvent` del mismo request.
 public struct RequestCapturedEvent: PryEvent {
-    public let requestID: UUID
+    public let requestID: Int
     public let method: String
     public let host: String
-    public let path: String
+    public let url: String           // path + query
+    public let headers: [(String, String)]
+    public let body: String?
     public let capturedAt: Date
 
-    public init(requestID: UUID, method: String, host: String, path: String, capturedAt: Date = Date()) {
+    public init(requestID: Int, method: String, host: String, url: String,
+                headers: [(String, String)], body: String?, capturedAt: Date = Date()) {
         self.requestID = requestID
         self.method = method
         self.host = host
-        self.path = path
+        self.url = url
+        self.headers = headers
+        self.body = body
         self.capturedAt = capturedAt
     }
 }
 
-/// Emitido cuando la response correspondiente llega (del servidor o de un short-circuit).
+/// Emitido cuando la response está lista (del servidor o short-circuit).
 public struct ResponseReceivedEvent: PryEvent {
-    public let requestID: UUID
-    public let status: Int
-    public let duration: TimeInterval
+    public let requestID: Int
+    public let status: UInt
+    public let headers: [(String, String)]
+    public let body: String?
+    public let latencyMs: Int
     public let isMock: Bool
 
-    public init(requestID: UUID, status: Int, duration: TimeInterval, isMock: Bool) {
+    public init(requestID: Int, status: UInt, headers: [(String, String)],
+                body: String?, latencyMs: Int, isMock: Bool) {
         self.requestID = requestID
         self.status = status
-        self.duration = duration
+        self.headers = headers
+        self.body = body
+        self.latencyMs = latencyMs
         self.isMock = isMock
     }
 }
@@ -158,6 +176,19 @@ public struct DNSOverridesChangedEvent: PryEvent {
     public let changedAt: Date
     public init(overrides: [(String, String)], changedAt: Date = Date()) {
         self.overrides = overrides
+        self.changedAt = changedAt
+    }
+}
+
+/// Emitido cuando cambia el estado de grabación (start/stop) o la lista
+/// de grabaciones guardadas (delete).
+public struct RecordingsChangedEvent: PryEvent {
+    public let names: [String]
+    public let isRecording: Bool
+    public let changedAt: Date
+    public init(names: [String], isRecording: Bool, changedAt: Date = Date()) {
+        self.names = names
+        self.isRecording = isRecording
         self.changedAt = changedAt
     }
 }

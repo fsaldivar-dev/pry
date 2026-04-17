@@ -20,6 +20,7 @@ struct MainWindow: View {
     @State private var showHostRedirects = false
     @State private var showHeaderRules = false
     @State private var showDNSOverrides = false
+    @State private var showRecordings = false
     @State private var sidebarWidth: CGFloat = 220
     @State private var detailHeight: CGFloat = 280
     @State private var showSidebar = true
@@ -168,6 +169,10 @@ struct MainWindow: View {
                     Image(systemName: "network")
                     Text("DNS")
                 }
+                Button { showRecordings.toggle() } label: {
+                    Image(systemName: "record.circle")
+                    Text("Recordings")
+                }
             }
         }
         .sheet(isPresented: $showMocking) {
@@ -191,6 +196,9 @@ struct MainWindow: View {
         .sheet(isPresented: $showDNSOverrides) {
             DNSOverridesView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
+        .sheet(isPresented: $showRecordings) {
+            RecordingsView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
+        }
         .sheet(isPresented: $showBreakpoints) {
             BreakpointListView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
@@ -208,7 +216,7 @@ struct MainWindow: View {
         } else {
             // Pasamos core.interceptors para que la chain nueva (ADR-006) corra en el
             // pipeline real — BlockInterceptor y futuros interceptors ejecutan de verdad.
-            do { try proxy.start(interceptors: core.interceptors) } catch { print("Failed to start proxy: \(error)") }
+            do { try proxy.start(interceptors: core.interceptors, eventBus: core.bus) } catch { print("Failed to start proxy: \(error)") }
         }
     }
 }

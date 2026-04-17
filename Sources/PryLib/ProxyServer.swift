@@ -13,9 +13,14 @@ public final class ProxyServer {
     /// se ejecute antes del flow legacy.
     public let interceptors: InterceptorRegistry?
 
-    public init(port: Int = Config.defaultPort, interceptors: InterceptorRegistry? = nil) {
+    /// Bus opcional para observers (Recordings, métricas, UI reactiva). PryApp
+    /// pasa `core.bus`; CLI lo deja nil y no emite eventos.
+    public let eventBus: EventBus?
+
+    public init(port: Int = Config.defaultPort, interceptors: InterceptorRegistry? = nil, eventBus: EventBus? = nil) {
         self.port = port
         self.interceptors = interceptors
+        self.eventBus = eventBus
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 
         // Try to init CA — if it fails, TLS interception disabled
@@ -33,6 +38,7 @@ public final class ProxyServer {
         let mocks = Config.loadMocks()
         let ca = self.ca
         let interceptors = self.interceptors
+        let eventBus = self.eventBus
 
         // Load legacy mocks from /tmp/pry.mocks into MockEngine
         for (path, body) in mocks {
@@ -49,8 +55,8 @@ public final class ProxyServer {
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes))
                     )
                     try channel.pipeline.syncOperations.addHandler(HTTPResponseEncoder())
-                    try channel.pipeline.syncOperations.addHandler(ConnectHandler(ca: ca, interceptors: interceptors))
-                    try channel.pipeline.syncOperations.addHandler(HTTPInterceptor(filter: filter, interceptors: interceptors))
+                    try channel.pipeline.syncOperations.addHandler(ConnectHandler(ca: ca, interceptors: interceptors, eventBus: eventBus))
+                    try channel.pipeline.syncOperations.addHandler(HTTPInterceptor(filter: filter, interceptors: interceptors, eventBus: eventBus))
                 }
             }
             .childChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
