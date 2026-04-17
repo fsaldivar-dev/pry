@@ -37,15 +37,35 @@ grep -n "static let shared\|static var shared" <archivos-modificados>
 
 Si aparece en código nuevo de PryApp → violación. Los singletons legacy (`MockEngine.shared`, etc.) están permitidos sólo si se consumen desde un `Store` como adapter temporal — marcalo como "coexistencia" (no violación) pero loguealo en un warning.
 
-### Regla 2 — Layering: Views no importan PryLib directo
+### Regla 2 — Layering: Features SÍ pueden importar PryLib, pero sólo para tipos de contrato arquitectónico
 
-Para cada `.swift` agregado o modificado bajo `Sources/PryApp/Features/` o `Sources/PryApp/`:
+Post-Milestone 2 del refactor, los tipos del contrato de intercepción viven en PryLib (no en PryApp/Core). Features los necesitan sí o sí para implementar el patrón. Lo que sigue prohibido es acceder a **singletons legacy** desde features.
+
+Para cada `.swift` agregado o modificado bajo `Sources/PryApp/Features/`:
 
 ```bash
-grep -n "^import PryLib" <archivo>
+# Verificar qué se importa de PryLib:
+grep "^import PryLib" <archivo>
+# Inspeccionar uso de .shared singletons:
+grep -E "\.shared\.(.+)" <archivo>
 ```
 
-Si aparece → violación. Views y Stores deben consumir tipos de `PryApp/Core/`, no de PryLib. Excepción: `Sources/PryApp/Core/AppCore.swift` puede importar PryLib para puentear types temporalmente.
+**PERMITIDO** (no violación):
+- `import PryLib` cuando se usan los tipos de contrato:
+  - `Interceptor` protocol + `Phase` enum + `InterceptResult` enum
+  - `InterceptorRegistry` actor
+  - `RequestContext`, `Response` structs
+  - `EventBus` actor
+  - `PryEvent` protocol + los eventos concretos (`RequestCapturedEvent`, `BlockListChangedEvent`, etc.)
+  - `StoragePaths` enum (paths centralizados)
+- `import PryLib` en `Sources/PryApp/Core/AppCore.swift` — la composition root concentra deliberadamente las dependencias de PryLib.
+
+**PROHIBIDO** (violación):
+- Uso de `.shared` singletons desde features: `MockEngine.shared`, `Recorder.shared`, `BreakpointStore.shared`, `RequestStore.shared`, `OutputBroker.shared`. Deben recibirse por init o por `@Environment(AppCore.self)`.
+- Uso de tipos legacy de PryLib que están siendo reemplazados: `BlockList.isBlocked` (reemplazado por `BlockStore.isBlocked`), `StatusOverrideStore.match` (a reemplazar), etc. Si el feature está migrando una función legacy, el código nuevo NO debe llamarla.
+- Views (archivos que terminan en `View.swift`) importando PryLib para tipos que no sean de contrato. Views idealmente consumen sólo lo que `AppCore` expone via `@Environment`.
+
+**Evaluación**: si el archivo es un Store o Interceptor bajo `Features/`, importar PryLib es esperado. Si es un `View.swift`, importar PryLib es sospechoso — chequear si realmente necesita tipos de contrato o está rompiendo layering.
 
 ### Regla 3 — Feature structure
 
