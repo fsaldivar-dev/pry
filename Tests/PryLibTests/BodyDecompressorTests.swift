@@ -21,23 +21,35 @@ final class BodyDecompressorTests: XCTestCase {
     // MARK: gzip
 
     func testGzipDecompressesToOriginal() throws {
+        #if !canImport(Compression)
+        throw XCTSkip("Compression framework only available on Apple platforms")
+        #else
         let data = try XCTUnwrap(Data(base64Encoded: Self.gzipB64))
         let inflated = try XCTUnwrap(BodyDecompressor.decompress(data, encoding: "gzip"))
         XCTAssertEqual(String(data: inflated, encoding: .utf8), Self.payload)
+        #endif
     }
 
     func testGzipAlsoAcceptsXGzip() throws {
+        #if !canImport(Compression)
+        throw XCTSkip("Compression framework only available on Apple platforms")
+        #else
         let data = try XCTUnwrap(Data(base64Encoded: Self.gzipB64))
         let inflated = try XCTUnwrap(BodyDecompressor.decompress(data, encoding: "x-gzip"))
         XCTAssertEqual(String(data: inflated, encoding: .utf8), Self.payload)
+        #endif
     }
 
     // MARK: deflate
 
     func testDeflateDecompressesToOriginal() throws {
+        #if !canImport(Compression)
+        throw XCTSkip("Compression framework only available on Apple platforms")
+        #else
         let data = try XCTUnwrap(Data(base64Encoded: Self.deflateRawB64))
         let inflated = try XCTUnwrap(BodyDecompressor.decompress(data, encoding: "deflate"))
         XCTAssertEqual(String(data: inflated, encoding: .utf8), Self.payload)
+        #endif
     }
 
     // MARK: brotli
