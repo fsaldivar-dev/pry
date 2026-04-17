@@ -1,5 +1,6 @@
 import XCTest
 @testable import PryApp
+import PryLib
 
 @available(macOS 14, *)
 final class BlockInterceptorTests: XCTestCase {

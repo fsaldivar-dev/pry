@@ -30,8 +30,14 @@ public final class ProxyManager {
         ProxyGuard.cleanupIfNeeded()
     }
 
-    public func start() throws {
-        let s = ProxyServer(port: port)
+    /// Arranca el proxy. Si se provee `interceptors`, la arquitectura nueva (ADR-006)
+    /// ejecuta su chain antes del flow legacy en cada request — features como
+    /// BlockInterceptor, MockInterceptor, etc. corren de verdad en el pipeline.
+    ///
+    /// Si `interceptors` es nil (ej. CLI headless), el proxy funciona con sólo
+    /// el flow legacy (BlockList.shared, MockEngine.shared, etc.) como antes.
+    public func start(interceptors: InterceptorRegistry? = nil) throws {
+        let s = ProxyServer(port: port, interceptors: interceptors)
         try s.start()
         serverBox.server = s
         isRunning = true
