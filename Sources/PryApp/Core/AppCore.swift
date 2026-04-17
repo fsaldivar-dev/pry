@@ -53,6 +53,11 @@ public final class AppCore {
     /// configurables sin ir a DNS real (phase .network).
     public let dnsOverrides: DNSOverridesStore
 
+    /// Feature Recordings (observer pattern): subscribe al EventBus para
+    /// acumular `RequestCapturedEvent` + `ResponseReceivedEvent` y guardar
+    /// como `.pryrecording` en disco. No muta el flow — es observer puro.
+    public let recordings: RecordingsStore
+
     public init() {
         let bus = EventBus()
         self.bus = bus
@@ -68,6 +73,7 @@ public final class AppCore {
         self.hostRedirects = HostRedirectsStore(storagePath: StoragePaths.redirectsFile, bus: bus)
         self.headerRules = HeaderRulesStore(storagePath: StoragePaths.headersFile, bus: bus)
         self.dnsOverrides = DNSOverridesStore(storagePath: StoragePaths.dnsFile, bus: bus)
+        self.recordings = RecordingsStore(bus: bus)
 
         // Registrar interceptors en la chain. Orden dentro de phase no importa —
         // la chain los corre sorted por `phase.rawValue`.

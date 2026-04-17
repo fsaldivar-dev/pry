@@ -36,8 +36,8 @@ public final class ProxyManager {
     ///
     /// Si `interceptors` es nil (ej. CLI headless), el proxy funciona con sólo
     /// el flow legacy (BlockList.shared, MockEngine.shared, etc.) como antes.
-    public func start(interceptors: InterceptorRegistry? = nil) throws {
-        let s = ProxyServer(port: port, interceptors: interceptors)
+    public func start(interceptors: InterceptorRegistry? = nil, eventBus: EventBus? = nil) throws {
+        let s = ProxyServer(port: port, interceptors: interceptors, eventBus: eventBus)
         try s.start()
         serverBox.server = s
         isRunning = true

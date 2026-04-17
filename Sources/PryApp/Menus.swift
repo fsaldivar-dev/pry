@@ -60,7 +60,7 @@ struct PryCommands: Commands {
         CommandMenu("Proxy") {
             Button("Start Proxy") {
                 do {
-                    try proxy.start(interceptors: core.interceptors)
+                    try proxy.start(interceptors: core.interceptors, eventBus: core.bus)
                 } catch {
                     presentError("No se pudo iniciar el proxy", detail: "\(error)")
                 }
@@ -77,7 +77,7 @@ struct PryCommands: Commands {
             Button("Restart Proxy") {
                 proxy.stop()
                 do {
-                    try proxy.start(interceptors: core.interceptors)
+                    try proxy.start(interceptors: core.interceptors, eventBus: core.bus)
                 } catch {
                     presentError("No se pudo reiniciar el proxy", detail: "\(error)")
                 }
