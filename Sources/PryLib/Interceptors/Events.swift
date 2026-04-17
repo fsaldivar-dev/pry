@@ -128,3 +128,36 @@ public struct MapLocalChangedEvent: PryEvent {
         self.changedAt = changedAt
     }
 }
+
+/// Emitido cuando la lista de host redirects (MapRemote migrado) cambia.
+/// Payload: `(sourceHost, targetHost)` por cada redirect.
+public struct HostRedirectsChangedEvent: PryEvent {
+    public let redirects: [(String, String)]
+    public let changedAt: Date
+    public init(redirects: [(String, String)], changedAt: Date = Date()) {
+        self.redirects = redirects
+        self.changedAt = changedAt
+    }
+}
+
+/// Emitido cuando las reglas de rewrite de headers cambian.
+/// Payload: `(action, name, value)` donde `action` es "set" o "remove".
+public struct HeaderRulesChangedEvent: PryEvent {
+    public let rules: [(String, String, String)]
+    public let changedAt: Date
+    public init(rules: [(String, String, String)], changedAt: Date = Date()) {
+        self.rules = rules
+        self.changedAt = changedAt
+    }
+}
+
+/// Emitido cuando la lista de DNS overrides cambia.
+/// Payload: `(domain, ip)` por cada override.
+public struct DNSOverridesChangedEvent: PryEvent {
+    public let overrides: [(String, String)]
+    public let changedAt: Date
+    public init(overrides: [(String, String)], changedAt: Date = Date()) {
+        self.overrides = overrides
+        self.changedAt = changedAt
+    }
+}
