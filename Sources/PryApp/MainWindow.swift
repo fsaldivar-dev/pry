@@ -171,34 +171,34 @@ struct MainWindow: View {
             }
         }
         .sheet(isPresented: $showMocking) {
-            UnifiedMockView().frame(minWidth: 800, minHeight: 500)
+            UnifiedMockView().dismissibleSheet().frame(minWidth: 800, minHeight: 500)
         }
         .sheet(isPresented: $showBlocking) {
-            BlocksView().frame(minWidth: 500, minHeight: 400)
+            BlocksView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showOverrides) {
-            StatusOverridesView().frame(minWidth: 500, minHeight: 400)
+            StatusOverridesView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showMapLocal) {
-            MapLocalView().frame(minWidth: 600, minHeight: 450)
+            MapLocalView().dismissibleSheet().frame(minWidth: 600, minHeight: 450)
         }
         .sheet(isPresented: $showHostRedirects) {
-            HostRedirectsView().frame(minWidth: 500, minHeight: 400)
+            HostRedirectsView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showHeaderRules) {
-            HeaderRulesView().frame(minWidth: 600, minHeight: 450)
+            HeaderRulesView().dismissibleSheet().frame(minWidth: 600, minHeight: 450)
         }
         .sheet(isPresented: $showDNSOverrides) {
-            DNSOverridesView().frame(minWidth: 500, minHeight: 400)
+            DNSOverridesView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showBreakpoints) {
-            BreakpointListView().frame(minWidth: 500, minHeight: 400)
+            BreakpointListView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showRules) {
-            RulesEditorView().frame(minWidth: 600, minHeight: 500)
+            RulesEditorView().dismissibleSheet().frame(minWidth: 600, minHeight: 500)
         }
         .sheet(isPresented: $showDeviceSetup) {
-            DeviceSetupView().frame(minWidth: 450, minHeight: 400)
+            DeviceSetupView().dismissibleSheet().frame(minWidth: 450, minHeight: 400)
         }
     }
 
