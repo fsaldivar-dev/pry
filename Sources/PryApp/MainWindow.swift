@@ -17,6 +17,9 @@ struct MainWindow: View {
     @State private var showBlocking = false
     @State private var showOverrides = false
     @State private var showMapLocal = false
+    @State private var showHostRedirects = false
+    @State private var showHeaderRules = false
+    @State private var showDNSOverrides = false
     @State private var sidebarWidth: CGFloat = 220
     @State private var detailHeight: CGFloat = 280
     @State private var showSidebar = true
@@ -138,45 +141,64 @@ struct MainWindow: View {
                     Text("Device")
                 }
             }
-            ToolbarItem(placement: .automatic) {
+            // Feature shortcuts — agrupadas para no exceder el límite de
+            // 10 items de SwiftUI ToolbarContentBuilder.
+            ToolbarItemGroup(placement: .automatic) {
                 Button { showBlocking.toggle() } label: {
                     Image(systemName: "shield.fill")
                     Text("Blocking")
                 }
-            }
-            ToolbarItem(placement: .automatic) {
                 Button { showOverrides.toggle() } label: {
                     Image(systemName: "arrow.up.right.diamond.fill")
                     Text("Overrides")
                 }
-            }
-            ToolbarItem(placement: .automatic) {
                 Button { showMapLocal.toggle() } label: {
                     Image(systemName: "doc.text")
                     Text("Map Local")
                 }
+                Button { showHostRedirects.toggle() } label: {
+                    Image(systemName: "arrow.triangle.branch")
+                    Text("Redirects")
+                }
+                Button { showHeaderRules.toggle() } label: {
+                    Image(systemName: "list.triangle")
+                    Text("Headers")
+                }
+                Button { showDNSOverrides.toggle() } label: {
+                    Image(systemName: "network")
+                    Text("DNS")
+                }
             }
         }
         .sheet(isPresented: $showMocking) {
-            UnifiedMockView().frame(minWidth: 800, minHeight: 500)
+            UnifiedMockView().dismissibleSheet().frame(minWidth: 800, minHeight: 500)
         }
         .sheet(isPresented: $showBlocking) {
-            BlocksView().frame(minWidth: 500, minHeight: 400)
+            BlocksView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showOverrides) {
-            StatusOverridesView().frame(minWidth: 500, minHeight: 400)
+            StatusOverridesView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showMapLocal) {
-            MapLocalView().frame(minWidth: 600, minHeight: 450)
+            MapLocalView().dismissibleSheet().frame(minWidth: 600, minHeight: 450)
+        }
+        .sheet(isPresented: $showHostRedirects) {
+            HostRedirectsView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
+        }
+        .sheet(isPresented: $showHeaderRules) {
+            HeaderRulesView().dismissibleSheet().frame(minWidth: 600, minHeight: 450)
+        }
+        .sheet(isPresented: $showDNSOverrides) {
+            DNSOverridesView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showBreakpoints) {
-            BreakpointListView().frame(minWidth: 500, minHeight: 400)
+            BreakpointListView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showRules) {
-            RulesEditorView().frame(minWidth: 600, minHeight: 500)
+            RulesEditorView().dismissibleSheet().frame(minWidth: 600, minHeight: 500)
         }
         .sheet(isPresented: $showDeviceSetup) {
-            DeviceSetupView().frame(minWidth: 450, minHeight: 400)
+            DeviceSetupView().dismissibleSheet().frame(minWidth: 450, minHeight: 400)
         }
     }
 
