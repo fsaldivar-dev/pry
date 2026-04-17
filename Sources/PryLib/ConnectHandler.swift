@@ -20,14 +20,16 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
     private var state: State = .idle
     private let ca: CertificateAuthority?
     private let interceptors: InterceptorRegistry?
+    private let eventBus: EventBus?
     // Stored as instance properties so all states can access them
     private var connectHost: String = ""
     private var connectPort: Int = 443
     private var shouldIntercept: Bool = false
 
-    init(ca: CertificateAuthority?, interceptors: InterceptorRegistry? = nil) {
+    init(ca: CertificateAuthority?, interceptors: InterceptorRegistry? = nil, eventBus: EventBus? = nil) {
         self.ca = ca
         self.interceptors = interceptors
+        self.eventBus = eventBus
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -226,7 +228,7 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
             }.flatMap {
                 context.pipeline.configureHTTPServerPipeline()
             }.flatMap {
-                context.pipeline.addHandler(TLSForwarder(host: host, port: port, eventLoop: context.eventLoop, interceptors: self.interceptors))
+                context.pipeline.addHandler(TLSForwarder(host: host, port: port, eventLoop: context.eventLoop, interceptors: self.interceptors, eventBus: self.eventBus))
             }.flatMap {
                 context.pipeline.removeHandler(self)
             }.whenFailure { error in
@@ -272,15 +274,17 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
     private let port: Int
     private let eventLoop: EventLoop
     private let interceptors: InterceptorRegistry?
+    private let eventBus: EventBus?
     private var requestHead: HTTPRequestHead?
     private var bodyBuffer: ByteBuffer?
     private var lastRequestId: Int = 0
 
-    init(host: String, port: Int, eventLoop: EventLoop, interceptors: InterceptorRegistry? = nil) {
+    init(host: String, port: Int, eventLoop: EventLoop, interceptors: InterceptorRegistry? = nil, eventBus: EventBus? = nil) {
         self.host = host
         self.port = port
         self.eventLoop = eventLoop
         self.interceptors = interceptors
+        self.eventBus = eventBus
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -341,20 +345,36 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
         BodyPrinter.printRequestBody(body, requestId: requestId)
         Config.appendLog(logEntry)
 
-        // Recorder hook — capture HTTPS request when recording
+        // Snapshot del body (string) reusado por Recorder + EventBus.
+        var requestBodyString: String?
+        if var buf = body, buf.readableBytes > 0 {
+            requestBodyString = buf.getString(at: buf.readerIndex, length: buf.readableBytes)
+        }
+        let requestHeaders = head.headers.map { ($0.name, $0.value) }
+
+        // Recorder hook (legacy — CLI/TUI).
         if Recorder.shared.isRecording {
-            var bodyString: String?
-            if var buf = body, buf.readableBytes > 0 {
-                bodyString = buf.readString(length: buf.readableBytes)
-            }
             Recorder.shared.noteRequestStart(
                 requestId: requestId,
                 method: "\(head.method)",
                 url: head.uri,
                 host: host,
-                headers: head.headers.map { ($0.name, $0.value) },
-                body: bodyString
+                headers: requestHeaders,
+                body: requestBodyString
             )
+        }
+
+        // Emit al EventBus — observers (RecordingsStore GUI, métricas).
+        if let bus = eventBus {
+            let event = RequestCapturedEvent(
+                requestID: requestId,
+                method: "\(head.method)",
+                host: host,
+                url: head.uri,
+                headers: requestHeaders,
+                body: requestBodyString
+            )
+            Task { await bus.publish(event) }
         }
 
         // Project tracking
@@ -520,7 +540,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                     return channel.pipeline.addHandler(sslHandler).flatMap {
                         channel.pipeline.addHTTPClientHandlers()
                     }.flatMap {
-                        channel.pipeline.addHandler(TLSResponseForwarder(clientChannel: context.channel, host: self.host, requestId: requestId))
+                        channel.pipeline.addHandler(TLSResponseForwarder(clientChannel: context.channel, host: self.host, requestId: requestId, eventBus: self.eventBus))
                     }
                 }
                 .connect(host: connectHost, port: port)
@@ -752,15 +772,19 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
     private let clientChannel: Channel
     private let host: String
     private let requestId: Int
+    private let eventBus: EventBus?
+    private let startedAt: Date
     private var contentType: String?
     private var responseHead: NIOHTTP1.HTTPResponseHead?
     private var responseBody: ByteBuffer?
     private var responseSent = false
 
-    init(clientChannel: Channel, host: String, requestId: Int = 0) {
+    init(clientChannel: Channel, host: String, requestId: Int = 0, eventBus: EventBus? = nil) {
         self.clientChannel = clientChannel
         self.host = host
         self.requestId = requestId
+        self.eventBus = eventBus
+        self.startedAt = Date()
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -800,8 +824,23 @@ final class TLSResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
             BodyPrinter.printResponseBody(displayBuf, contentType: contentType)
             var buf = displayBuf
             let bodyStr = buf.readString(length: buf.readableBytes)
+            let responseHeaders = head.headers.map { ($0.name, $0.value) }
             BodyPrinter.storeResponse(requestId: requestId, statusCode: UInt(head.status.code),
-                headers: head.headers.map { ($0.name, $0.value) }, body: bodyStr)
+                headers: responseHeaders, body: bodyStr)
+
+            // Emit al EventBus — observers HTTPS (Recordings GUI, métricas).
+            if let bus = eventBus {
+                let latencyMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                let event = ResponseReceivedEvent(
+                    requestID: requestId,
+                    status: UInt(head.status.code),
+                    headers: responseHeaders,
+                    body: bodyStr,
+                    latencyMs: latencyMs,
+                    isMock: false
+                )
+                Task { await bus.publish(event) }
+            }
         }
 
         clientChannel.write(NIOAny(HTTPServerResponsePart.head(head)), promise: nil)
