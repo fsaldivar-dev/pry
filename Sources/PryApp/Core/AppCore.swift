@@ -36,6 +36,11 @@ public final class AppCore {
     /// Feature StatusOverrides: responde con status codes configurables por pattern.
     public let statusOverrides: StatusOverridesStore
 
+    /// Feature MapLocal: responde con el contenido de un archivo local cuando la
+    /// URL matchea un pattern regex. Útil para reemplazar assets remotos con
+    /// versiones locales durante dev.
+    public let mapLocal: MapLocalStore
+
     public init() {
         let bus = EventBus()
         self.bus = bus
@@ -47,14 +52,17 @@ public final class AppCore {
         StoragePaths.ensureRoot()
         self.blocks = BlockStore(storagePath: StoragePaths.blocksFile, bus: bus)
         self.statusOverrides = StatusOverridesStore(storagePath: StoragePaths.overridesFile, bus: bus)
+        self.mapLocal = MapLocalStore(storagePath: StoragePaths.mapsFile, bus: bus)
 
         // Registrar interceptors en la chain.
         let interceptors = self.interceptors
         let blocks = self.blocks
         let statusOverrides = self.statusOverrides
+        let mapLocal = self.mapLocal
         Task {
             await interceptors.register(BlockInterceptor(store: blocks))
             await interceptors.register(StatusOverrideInterceptor(store: statusOverrides))
+            await interceptors.register(MapLocalInterceptor(store: mapLocal))
         }
     }
 
@@ -80,6 +88,16 @@ public final class AppCore {
         let core = AppCore()
         for (pattern, status) in overrides {
             core.statusOverrides.add(pattern: pattern, status: status)
+        }
+        return core
+    }
+
+    /// Factory de preview con `MapLocalStore` pre-poblado. Simétrico al resto.
+    @available(macOS 14, *)
+    public static func previewWithMapLocalMappings(_ mappings: [(String, String)]) -> AppCore {
+        let core = AppCore()
+        for (pattern, path) in mappings {
+            core.mapLocal.add(pattern: pattern, filePath: path)
         }
         return core
     }

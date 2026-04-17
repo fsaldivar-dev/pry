@@ -16,6 +16,7 @@ struct MainWindow: View {
     @State private var showDeviceSetup = false
     @State private var showBlocking = false
     @State private var showOverrides = false
+    @State private var showMapLocal = false
     @State private var sidebarWidth: CGFloat = 220
     @State private var detailHeight: CGFloat = 280
     @State private var showSidebar = true
@@ -149,6 +150,12 @@ struct MainWindow: View {
                     Text("Overrides")
                 }
             }
+            ToolbarItem(placement: .automatic) {
+                Button { showMapLocal.toggle() } label: {
+                    Image(systemName: "doc.text")
+                    Text("Map Local")
+                }
+            }
         }
         .sheet(isPresented: $showMocking) {
             UnifiedMockView().frame(minWidth: 800, minHeight: 500)
@@ -158,6 +165,9 @@ struct MainWindow: View {
         }
         .sheet(isPresented: $showOverrides) {
             StatusOverridesView().frame(minWidth: 500, minHeight: 400)
+        }
+        .sheet(isPresented: $showMapLocal) {
+            MapLocalView().frame(minWidth: 600, minHeight: 450)
         }
         .sheet(isPresented: $showBreakpoints) {
             BreakpointListView().frame(minWidth: 500, minHeight: 400)
