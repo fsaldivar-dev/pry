@@ -10,10 +10,12 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
     private var bodyBuffer: ByteBuffer?
     private let filter: String?
     private let interceptors: InterceptorRegistry?
+    private let eventBus: EventBus?
 
-    init(filter: String? = nil, interceptors: InterceptorRegistry? = nil) {
+    init(filter: String? = nil, interceptors: InterceptorRegistry? = nil, eventBus: EventBus? = nil) {
         self.filter = filter
         self.interceptors = interceptors
+        self.eventBus = eventBus
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -118,20 +120,36 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         BodyPrinter.printRequestBody(body, requestId: requestId)
         Config.appendLog(logEntry)
 
-        // Recorder hook — capture request when recording is active
+        // Snapshot del body como string, usado por observers (Recorder + bus).
+        var requestBodyString: String?
+        if var buf = body, buf.readableBytes > 0 {
+            requestBodyString = buf.getString(at: buf.readerIndex, length: buf.readableBytes)
+        }
+        let requestHeaders = head.headers.map { ($0.name, $0.value) }
+
+        // Recorder hook (legacy — CLI/TUI)
         if Recorder.shared.isRecording {
-            var bodyString: String?
-            if var buf = body, buf.readableBytes > 0 {
-                bodyString = buf.readString(length: buf.readableBytes)
-            }
             Recorder.shared.noteRequestStart(
                 requestId: requestId,
                 method: "\(head.method)",
                 url: path,
                 host: host,
-                headers: head.headers.map { ($0.name, $0.value) },
-                body: bodyString
+                headers: requestHeaders,
+                body: requestBodyString
             )
+        }
+
+        // Emit al EventBus — observers como RecordingsStore (GUI) reaccionan.
+        if let bus = eventBus {
+            let event = RequestCapturedEvent(
+                requestID: requestId,
+                method: "\(head.method)",
+                host: host,
+                url: path,
+                headers: requestHeaders,
+                body: requestBodyString
+            )
+            Task { await bus.publish(event) }
         }
 
         // Project tracking — auto-tag request with project
@@ -307,7 +325,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         ClientBootstrap(group: group)
             .channelInitializer { channel in
                 channel.pipeline.addHTTPClientHandlers().flatMap {
-                    channel.pipeline.addHandler(ResponseForwarder(clientChannel: clientChannel, host: host, requestId: requestId))
+                    channel.pipeline.addHandler(ResponseForwarder(clientChannel: clientChannel, host: host, requestId: requestId, eventBus: self.eventBus))
                 }
             }
             .connect(host: targetHost, port: port)
@@ -480,16 +498,20 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
     private let clientChannel: Channel
     private let host: String
     private let requestId: Int
+    private let eventBus: EventBus?
+    private let startedAt: Date
     private var contentType: String?
     private var responseHead: NIOHTTP1.HTTPResponseHead?
     private var responseBody: ByteBuffer?
     private var statusCode: UInt = 0
     private var responseSent = false
 
-    init(clientChannel: Channel, host: String, requestId: Int = 0) {
+    init(clientChannel: Channel, host: String, requestId: Int = 0, eventBus: EventBus? = nil) {
         self.clientChannel = clientChannel
         self.host = host
         self.requestId = requestId
+        self.eventBus = eventBus
+        self.startedAt = Date()
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -534,14 +556,30 @@ final class ResponseForwarder: ChannelInboundHandler, @unchecked Sendable {
             let bodyStr = buf.readString(length: buf.readableBytes)
             BodyPrinter.storeResponse(requestId: requestId, statusCode: statusCode, headers: [], body: bodyStr)
 
-            // Recorder hook — capture response when recording is active
+            let responseHeaders = head.headers.map { ($0.name, $0.value) }
+
+            // Recorder hook (legacy — CLI/TUI).
             if Recorder.shared.isRecording {
                 Recorder.shared.noteResponseComplete(
                     requestId: requestId,
                     statusCode: statusCode,
-                    headers: head.headers.map { ($0.name, $0.value) },
+                    headers: responseHeaders,
                     body: bodyStr
                 )
+            }
+
+            // Emit al EventBus — observers (RecordingsStore, métricas, etc.).
+            if let bus = eventBus {
+                let latencyMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                let event = ResponseReceivedEvent(
+                    requestID: requestId,
+                    status: statusCode,
+                    headers: responseHeaders,
+                    body: bodyStr,
+                    latencyMs: latencyMs,
+                    isMock: false
+                )
+                Task { await bus.publish(event) }
             }
         }
 
