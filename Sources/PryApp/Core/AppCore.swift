@@ -33,6 +33,9 @@ public final class AppCore {
     /// Feature Blocking: lista de dominios bloqueados con matching + wildcards.
     public let blocks: BlockStore
 
+    /// Feature StatusOverrides: responde con status codes configurables por pattern.
+    public let statusOverrides: StatusOverridesStore
+
     public init() {
         let bus = EventBus()
         self.bus = bus
@@ -43,11 +46,16 @@ public final class AppCore {
         // ninguna feature importa PryLib directamente.
         StoragePaths.ensureRoot()
         self.blocks = BlockStore(storagePath: StoragePaths.blocksFile, bus: bus)
+        self.statusOverrides = StatusOverridesStore(storagePath: StoragePaths.overridesFile, bus: bus)
 
         // Registrar interceptors en la chain.
         let interceptors = self.interceptors
         let blocks = self.blocks
-        Task { await interceptors.register(BlockInterceptor(store: blocks)) }
+        let statusOverrides = self.statusOverrides
+        Task {
+            await interceptors.register(BlockInterceptor(store: blocks))
+            await interceptors.register(StatusOverrideInterceptor(store: statusOverrides))
+        }
     }
 
     /// Factory para `#Preview`. Genera un `AppCore` aislado sin efectos reales.
@@ -62,6 +70,17 @@ public final class AppCore {
     public static func previewWithBlockedDomains(_ domains: [String]) -> AppCore {
         let core = AppCore()
         for d in domains { core.blocks.add(d) }
+        return core
+    }
+
+    /// Factory de preview con `StatusOverridesStore` pre-poblado (útil para
+    /// `#Preview "with data"`). Simétrico a `previewWithBlockedDomains`.
+    @available(macOS 14, *)
+    public static func previewWithStatusOverrides(_ overrides: [(String, Int)]) -> AppCore {
+        let core = AppCore()
+        for (pattern, status) in overrides {
+            core.statusOverrides.add(pattern: pattern, status: status)
+        }
         return core
     }
 }
