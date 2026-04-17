@@ -41,6 +41,18 @@ public final class AppCore {
     /// versiones locales durante dev.
     public let mapLocal: MapLocalStore
 
+    /// Feature HostRedirects (MapRemote migrado): redirige requests de un host
+    /// a otro a nivel .network phase via .transform.
+    public let hostRedirects: HostRedirectsStore
+
+    /// Feature HeaderRules (HeaderRewrite migrado): aplica reglas set/remove
+    /// sobre headers de requests a nivel .transform phase.
+    public let headerRules: HeaderRulesStore
+
+    /// Feature DNSOverrides (DNSSpoofing migrado): resuelve dominios a IPs
+    /// configurables sin ir a DNS real (phase .network).
+    public let dnsOverrides: DNSOverridesStore
+
     public init() {
         let bus = EventBus()
         self.bus = bus
@@ -53,16 +65,26 @@ public final class AppCore {
         self.blocks = BlockStore(storagePath: StoragePaths.blocksFile, bus: bus)
         self.statusOverrides = StatusOverridesStore(storagePath: StoragePaths.overridesFile, bus: bus)
         self.mapLocal = MapLocalStore(storagePath: StoragePaths.mapsFile, bus: bus)
+        self.hostRedirects = HostRedirectsStore(storagePath: StoragePaths.redirectsFile, bus: bus)
+        self.headerRules = HeaderRulesStore(storagePath: StoragePaths.headersFile, bus: bus)
+        self.dnsOverrides = DNSOverridesStore(storagePath: StoragePaths.dnsFile, bus: bus)
 
-        // Registrar interceptors en la chain.
+        // Registrar interceptors en la chain. Orden dentro de phase no importa —
+        // la chain los corre sorted por `phase.rawValue`.
         let interceptors = self.interceptors
         let blocks = self.blocks
         let statusOverrides = self.statusOverrides
         let mapLocal = self.mapLocal
+        let hostRedirects = self.hostRedirects
+        let headerRules = self.headerRules
+        let dnsOverrides = self.dnsOverrides
         Task {
             await interceptors.register(BlockInterceptor(store: blocks))
             await interceptors.register(StatusOverrideInterceptor(store: statusOverrides))
             await interceptors.register(MapLocalInterceptor(store: mapLocal))
+            await interceptors.register(HeaderRulesInterceptor(store: headerRules))
+            await interceptors.register(HostRedirectInterceptor(store: hostRedirects))
+            await interceptors.register(DNSOverrideInterceptor(store: dnsOverrides))
         }
     }
 
@@ -98,6 +120,40 @@ public final class AppCore {
         let core = AppCore()
         for (pattern, path) in mappings {
             core.mapLocal.add(pattern: pattern, filePath: path)
+        }
+        return core
+    }
+
+    /// Factory de preview con `HostRedirectsStore` pre-poblado.
+    @available(macOS 14, *)
+    public static func previewWithHostRedirects(_ redirects: [(String, String)]) -> AppCore {
+        let core = AppCore()
+        for (source, target) in redirects {
+            core.hostRedirects.add(source: source, target: target)
+        }
+        return core
+    }
+
+    /// Factory de preview con `HeaderRulesStore` pre-poblado.
+    /// Cada tupla: `(action, name, value)` — `action` es `.set` o `.remove`.
+    @available(macOS 14, *)
+    public static func previewWithHeaderRules(_ rules: [(HeaderRuleAction, String, String)]) -> AppCore {
+        let core = AppCore()
+        for (action, name, value) in rules {
+            switch action {
+            case .set:    core.headerRules.addSet(name: name, value: value)
+            case .remove: core.headerRules.addRemove(name: name)
+            }
+        }
+        return core
+    }
+
+    /// Factory de preview con `DNSOverridesStore` pre-poblado.
+    @available(macOS 14, *)
+    public static func previewWithDNSOverrides(_ overrides: [(String, String)]) -> AppCore {
+        let core = AppCore()
+        for (domain, ip) in overrides {
+            core.dnsOverrides.add(domain: domain, ip: ip)
         }
         return core
     }
