@@ -1,6 +1,19 @@
 import XCTest
 @testable import PryLib
 
+/// Helper thread-safe counter — evita problemas de strict concurrency al
+/// capturar contadores en closures `@Sendable`.
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value = 0
+    var value: Int {
+        lock.withLock { _value }
+    }
+    func increment() {
+        lock.withLock { _value += 1 }
+    }
+}
+
 final class WatchdogTests: XCTestCase {
 
     // MARK: - Logic via dependency injection
@@ -11,14 +24,14 @@ final class WatchdogTests: XCTestCase {
 
     func testExitsWhenProcessDies_runsCleanup() {
         // El proceso muere en la iteración 2. El cleanup debe ejecutarse exactamente una vez.
-        var aliveCallCount = 0
+        let aliveCallCount = Counter()
         let aliveStub: @Sendable (pid_t) -> Bool = { _ in
-            aliveCallCount += 1
-            return aliveCallCount < 2   // iteración 1: alive, iteración 2: dead
+            aliveCallCount.increment()
+            return aliveCallCount.value < 2   // iteración 1: alive, iteración 2: dead
         }
 
-        var cleanupCalls = 0
-        let cleanup: @Sendable () -> Void = { cleanupCalls += 1 }
+        let cleanupCalls = Counter()
+        let cleanup: @Sendable () -> Void = { cleanupCalls.increment() }
 
         let result = Watchdog.run(
             parentPID: 99999,
@@ -30,13 +43,13 @@ final class WatchdogTests: XCTestCase {
         )
 
         XCTAssertEqual(result, .cleanupExecuted)
-        XCTAssertEqual(cleanupCalls, 1, "cleanup debería ejecutarse exactamente una vez")
+        XCTAssertEqual(cleanupCalls.value, 1, "cleanup debería ejecutarse exactamente una vez")
     }
 
     func testExitsSilentlyWhenSentinelPresent_doesNotCleanup() {
         // Sentinel presente desde el arranque → salida silenciosa, sin tocar proxy.
-        var cleanupCalls = 0
-        let cleanup: @Sendable () -> Void = { cleanupCalls += 1 }
+        let cleanupCalls = Counter()
+        let cleanup: @Sendable () -> Void = { cleanupCalls.increment() }
 
         let result = Watchdog.run(
             parentPID: 12345,
@@ -48,7 +61,7 @@ final class WatchdogTests: XCTestCase {
         )
 
         XCTAssertEqual(result, .silentExit)
-        XCTAssertEqual(cleanupCalls, 0, "cleanup NO debería ejecutarse cuando hay sentinel")
+        XCTAssertEqual(cleanupCalls.value, 0, "cleanup NO debería ejecutarse cuando hay sentinel")
     }
 
     func testSentinelWinsEvenIfProcessAlsoDead() {
@@ -56,8 +69,8 @@ final class WatchdogTests: XCTestCase {
         // el sentinel manda → no hacemos cleanup. Esto es el ordering correcto
         // para evitar que `stop()` de PryApp (que escribe sentinel y luego mata
         // system proxy él mismo) se pise con el watchdog.
-        var cleanupCalls = 0
-        let cleanup: @Sendable () -> Void = { cleanupCalls += 1 }
+        let cleanupCalls = Counter()
+        let cleanup: @Sendable () -> Void = { cleanupCalls.increment() }
 
         let result = Watchdog.run(
             parentPID: 12345,
@@ -69,34 +82,34 @@ final class WatchdogTests: XCTestCase {
         )
 
         XCTAssertEqual(result, .silentExit)
-        XCTAssertEqual(cleanupCalls, 0)
+        XCTAssertEqual(cleanupCalls.value, 0)
     }
 
     func testContinuesPollingWhileProcessAlive() {
         // Padre siempre vivo, sin sentinel → debería hacer exactamente `maxIterations` polls
         // y cortar con `.maxIterationsReached` sin llamar cleanup.
-        var aliveCalls = 0
-        var sleepCalls = 0
-        var cleanupCalls = 0
+        let aliveCalls = Counter()
+        let sleepCalls = Counter()
+        let cleanupCalls = Counter()
 
         let result = Watchdog.run(
             parentPID: 12345,
             pollInterval: 0.01,
             processAlive: { _ in
-                aliveCalls += 1
+                aliveCalls.increment()
                 return true
             },
             sentinelExists: { _ in false },
-            sleep: { _ in sleepCalls += 1 },
-            onCleanup: { cleanupCalls += 1 },
+            sleep: { _ in sleepCalls.increment() },
+            onCleanup: { cleanupCalls.increment() },
             maxIterations: 5
         )
 
         XCTAssertEqual(result, .maxIterationsReached)
-        XCTAssertEqual(aliveCalls, 5, "debería hacer 5 polls exactos")
+        XCTAssertEqual(aliveCalls.value, 5, "debería hacer 5 polls exactos")
         // Sleep corre entre polls; tras el 5º poll cortamos antes de dormir.
-        XCTAssertEqual(sleepCalls, 4, "debería dormir 4 veces entre 5 polls")
-        XCTAssertEqual(cleanupCalls, 0, "cleanup NO debería ejecutarse mientras el padre vive")
+        XCTAssertEqual(sleepCalls.value, 4, "debería dormir 4 veces entre 5 polls")
+        XCTAssertEqual(cleanupCalls.value, 0, "cleanup NO debería ejecutarse mientras el padre vive")
     }
 
     func testSentinelPathUsesParentPID() {
