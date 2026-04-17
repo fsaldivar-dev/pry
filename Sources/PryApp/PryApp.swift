@@ -31,6 +31,9 @@ struct PryApp: App {
                 .environment(core)
         }
         .defaultSize(width: 1200, height: 800)
+        .commands {
+            PryCommands(proxy: proxyManager, store: requestStore, core: core)
+        }
 
         Settings {
             SettingsView()
