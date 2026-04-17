@@ -226,7 +226,7 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
             }.flatMap {
                 context.pipeline.configureHTTPServerPipeline()
             }.flatMap {
-                context.pipeline.addHandler(TLSForwarder(host: host, port: port, eventLoop: context.eventLoop))
+                context.pipeline.addHandler(TLSForwarder(host: host, port: port, eventLoop: context.eventLoop, interceptors: self.interceptors))
             }.flatMap {
                 context.pipeline.removeHandler(self)
             }.whenFailure { error in
@@ -271,14 +271,16 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
     private let host: String
     private let port: Int
     private let eventLoop: EventLoop
+    private let interceptors: InterceptorRegistry?
     private var requestHead: HTTPRequestHead?
     private var bodyBuffer: ByteBuffer?
     private var lastRequestId: Int = 0
 
-    init(host: String, port: Int, eventLoop: EventLoop) {
+    init(host: String, port: Int, eventLoop: EventLoop, interceptors: InterceptorRegistry? = nil) {
         self.host = host
         self.port = port
         self.eventLoop = eventLoop
+        self.interceptors = interceptors
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -298,6 +300,26 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
     }
 
     private func handleDecryptedRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?) {
+        // Arquitectura nueva (ADR-006): chain ejecuta antes del flow legacy en
+        // requests HTTPS descifrados. Si algún interceptor shortCircuitea,
+        // respondemos y cortamos; si pasa limpia, seguimos con el flow legacy.
+        if let registry = interceptors {
+            let path = head.uri
+            let ctx = buildRequestContext(head: head, host: host, port: port, path: path)
+            executeChainAsync(ctx: ctx, registry: registry, eventLoop: context.eventLoop).whenComplete { result in
+                switch result {
+                case .success(.some(let response)):
+                    self.writeChainResponse(response, context: context)
+                case .success(.none), .failure:
+                    self.handleDecryptedRequestLegacy(context: context, head: head, body: body)
+                }
+            }
+            return
+        }
+        handleDecryptedRequestLegacy(context: context, head: head, body: body)
+    }
+
+    private func handleDecryptedRequestLegacy(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?) {
         let logEntry = "\(head.method) https://\(host)\(head.uri)"
         let requestId = BodyPrinter.printRequestHead(head, host: host, port: port)
         BodyPrinter.printRequestBody(body, requestId: requestId)
@@ -548,6 +570,69 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
             OutputBroker.shared.log(errText("!!! WebSocket TLS context failed: \(error)"))
             context.close(promise: nil)
         }
+    }
+
+    // MARK: - Integración de la chain nueva (ADR-006 Milestone 2 Paso D)
+
+    private func buildRequestContext(head: HTTPRequestHead, host: String, port: Int, path: String) -> RequestContext {
+        var headers: [String: String] = [:]
+        for (name, value) in head.headers {
+            headers[name] = value
+        }
+        return RequestContext(
+            method: "\(head.method)",
+            host: host,
+            path: path,
+            port: port,
+            headers: headers,
+            bodyRef: nil
+        )
+    }
+
+    private func executeChainAsync(
+        ctx: RequestContext,
+        registry: InterceptorRegistry,
+        eventLoop: EventLoop
+    ) -> EventLoopFuture<Response?> {
+        let promise = eventLoop.makePromise(of: Response?.self)
+        Task {
+            let chain = await registry.chain()
+            for interceptor in chain {
+                let result = await interceptor.intercept(ctx)
+                switch result {
+                case .pass, .transform:
+                    continue
+                case .shortCircuit(let response):
+                    promise.succeed(response)
+                    return
+                case .pause:
+                    continue // TODO: wiring con UI para breakpoints
+                }
+            }
+            promise.succeed(nil)
+        }
+        return promise.futureResult
+    }
+
+    private func writeChainResponse(_ response: Response, context: ChannelHandlerContext) {
+        OutputBroker.shared.log(
+            errText("🛑 \(response.status) https://\(host) (chain)"),
+            type: response.status >= 400 ? .error : .response
+        )
+        var headers = HTTPHeaders()
+        for (name, value) in response.headers {
+            headers.add(name: name, value: value)
+        }
+        headers.add(name: "Connection", value: "close")
+        let status = HTTPResponseStatus(statusCode: response.status)
+        let responseHead = HTTPResponseHead(version: .http1_1, status: status, headers: headers)
+        context.write(wrapOutboundOut(.head(responseHead)), promise: nil)
+        if let body = response.body, !body.isEmpty {
+            var buffer = context.channel.allocator.buffer(capacity: body.count)
+            buffer.writeBytes(body)
+            context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+        }
+        context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
     }
 }
 
