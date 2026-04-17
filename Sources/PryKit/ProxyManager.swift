@@ -12,12 +12,17 @@ public final class ProxyManager {
     public var requestCount: Int = 0
     public var domains: [String] = []
     public var systemProxyEnabled = false
+    /// True cuando el watchdog subprocess está corriendo y monitoreando a PryApp.
+    /// Si es false después de un `start()`, probablemente no encontramos el binario `pry`
+    /// — el proxy funciona igual, pero sin protección contra force-quit del Mac.
+    public var watchdogRunning: Bool = false
     /// Mensaje efímero a mostrar como banner en la GUI (toasts de acción).
     /// Se setea tras operaciones que requieren que el usuario entienda el efecto
     /// (ej. agregar dominio al watchlist con proxy corriendo). La UI limpia después de mostrarlo.
     public var statusBanner: String?
 
     private let serverBox = ServerBox()
+    private let watchdogBox = WatchdogBox()
 
     public init(port: Int = Config.port()) {
         self.port = port
@@ -33,9 +38,15 @@ public final class ProxyManager {
         reloadDomains()
         // Auto-enable system proxy so traffic flows through Pry
         enableSystemProxy()
+        // Spawn watchdog: si PryApp es force-quit (SIGKILL), el watchdog restaura
+        // el system proxy para que el Mac no se quede sin red.
+        spawnWatchdog()
     }
 
     public func stop() {
+        // Write sentinel + terminate watchdog BEFORE disabling proxy, para evitar
+        // que el watchdog gane la carrera y "limpie" algo que estamos limpiando nosotros.
+        shutdownWatchdog()
         // Restore system proxy before shutting down
         disableSystemProxy()
         serverBox.shutdownIfNeeded()
@@ -95,8 +106,71 @@ public final class ProxyManager {
         reloadDomains()
     }
 
+    // MARK: - Watchdog
+
+    /// Spawnea `pry --watchdog <getpid()>` como proceso detached. Si PryApp es
+    /// force-quit (kill -9) o crashea, el watchdog detecta al padre muerto y
+    /// restaura el system proxy — sin él, el Mac quedaría sin red hasta la
+    /// próxima vez que alguien ejecute `pry`.
+    private func spawnWatchdog() {
+        if watchdogBox.isRunning { return }
+        guard let binary = resolvePryBinary() else {
+            fputs("[ProxyManager] Warning: no se encontró el binario `pry`, watchdog deshabilitado. Si PryApp cae abruptamente, ejecutar `pry start` o `pry stop` restaurará la red.\n", stderr)
+            watchdogRunning = false
+            return
+        }
+        let ppid = ProcessInfo.processInfo.processIdentifier
+        // Limpiar cualquier sentinel stale de un ciclo anterior del mismo PID.
+        try? FileManager.default.removeItem(atPath: Watchdog.sentinelPath(for: ppid))
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: binary)
+        process.arguments = ["--watchdog", "\(ppid)"]
+        // Descartar stdout/stderr del watchdog para no contaminar la GUI.
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            watchdogBox.set(process: process, parentPID: ppid)
+            watchdogRunning = true
+        } catch {
+            fputs("[ProxyManager] Failed to spawn watchdog: \(error)\n", stderr)
+            watchdogRunning = false
+        }
+    }
+
+    /// Shutdown ordenado del watchdog: escribe sentinel, llama `.terminate()`,
+    /// espera brevemente, borra sentinel.
+    private func shutdownWatchdog() {
+        watchdogBox.shutdownGracefully(timeout: 1.0)
+        watchdogRunning = false
+    }
+
+    /// Intenta resolver el path del binario `pry`:
+    /// 1. Sibling del ejecutable actual (dentro de `PryApp.app/Contents/MacOS/pry`)
+    /// 2. `/usr/local/bin/pry` (Homebrew Intel / make install)
+    /// 3. `/opt/homebrew/bin/pry` (Homebrew Apple Silicon)
+    /// Devuelve nil si ningún candidato es ejecutable — el caller loguea warning.
+    private func resolvePryBinary() -> String? {
+        let fm = FileManager.default
+        var candidates: [String] = []
+        if let exec = Bundle.main.executablePath {
+            let sibling = (exec as NSString).deletingLastPathComponent + "/pry"
+            candidates.append(sibling)
+        }
+        candidates.append("/usr/local/bin/pry")
+        candidates.append("/opt/homebrew/bin/pry")
+        for c in candidates where fm.isExecutableFile(atPath: c) {
+            return c
+        }
+        return nil
+    }
+
     deinit {
-        // Ensure system proxy is restored even on unexpected termination
+        // Belt-and-suspenders: si llegamos acá sin haber llamado stop(),
+        // apagar watchdog y system proxy. Usamos el box (Sendable) porque
+        // deinit no puede invocar métodos MainActor-isolated.
+        watchdogBox.shutdownGracefully(timeout: 0.5)
         SystemProxy.disable()
         ProxyState.clear()
         serverBox.shutdownIfNeeded()
@@ -118,6 +192,48 @@ private final class ServerBox: @unchecked Sendable {
         lock.withLock {
             _server?.shutdown()
             _server = nil
+        }
+    }
+}
+
+/// Thread-safe box para el Process del watchdog, permite acceso desde `deinit`
+/// sin violar aislamiento de MainActor.
+private final class WatchdogBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _process: Process?
+    private var _parentPID: pid_t?
+
+    var isRunning: Bool {
+        lock.withLock { _process?.isRunning ?? false }
+    }
+
+    func set(process: Process, parentPID: pid_t) {
+        lock.withLock {
+            _process = process
+            _parentPID = parentPID
+        }
+    }
+
+    /// Shutdown limpio: escribe sentinel, termina el proceso, espera hasta `timeout`,
+    /// borra sentinel, limpia referencias. Idempotente.
+    func shutdownGracefully(timeout: TimeInterval) {
+        // Capturar referencias bajo lock, trabajar fuera del lock para no bloquear.
+        let (process, ppid): (Process?, pid_t?) = lock.withLock { (_process, _parentPID) }
+        guard let process = process, let ppid = ppid else { return }
+        let sentinel = Watchdog.sentinelPath(for: ppid)
+        StoragePaths.ensureRoot()
+        FileManager.default.createFile(atPath: sentinel, contents: Data())
+        if process.isRunning {
+            process.terminate()
+        }
+        let deadline = Date().addingTimeInterval(timeout)
+        while process.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        try? FileManager.default.removeItem(atPath: sentinel)
+        lock.withLock {
+            _process = nil
+            _parentPID = nil
         }
     }
 }
