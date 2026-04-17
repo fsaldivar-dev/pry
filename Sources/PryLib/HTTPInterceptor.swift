@@ -47,11 +47,25 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
             let eventLoop = context.eventLoop
             executeChainAsync(ctx: ctx, registry: registry, eventLoop: eventLoop).whenComplete { result in
                 switch result {
-                case .success(.some(let response)):
+                case .success((.shortCircuit(let response), _)):
                     // Un interceptor short-circuiteó — respondemos con eso.
                     self.writeResponse(response, context: context, host: host)
-                case .success(.none), .failure:
-                    // Pass limpio o error ejecutando la chain → flow legacy.
+                case .success((.pass, let finalCtx)):
+                    // Chain pasó limpia (posiblemente mutando ctx). Aplicamos las
+                    // mutaciones al head + usamos el host/port del ctx final al
+                    // forwardear — esto hace que MapRemote (cambia host),
+                    // HeaderRewrite (cambia headers), etc. afecten el request real.
+                    let mutatedHead = self.applyContextToHead(head, ctx: finalCtx)
+                    self.handleLegacy(
+                        context: context,
+                        head: mutatedHead,
+                        host: finalCtx.host,
+                        port: finalCtx.port,
+                        path: finalCtx.path,
+                        body: body
+                    )
+                case .failure:
+                    // Error ejecutando la chain → fallback al flow legacy sin mutaciones.
                     self.handleLegacy(context: context, head: head, host: host, port: port, path: path, body: body)
                 }
             }
@@ -342,28 +356,43 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         )
     }
 
-    /// Ejecuta la chain de interceptors ordenada por phase. Retorna el `Response` del
-    /// primer interceptor que haga `.shortCircuit`, o `nil` si la chain pasa limpia
-    /// (ie. todos los interceptors retornan `.pass` o `.transform`).
+    /// Resultado de la ejecución de la chain completa.
+    enum ChainOutcome {
+        /// Un interceptor cortó la chain con una respuesta — no ir a la red.
+        case shortCircuit(Response)
+        /// La chain pasó limpia (posiblemente mutando el contexto). El caller
+        /// debe aplicar el ctx final al flow legacy (forward con mutaciones).
+        case pass
+    }
+
+    /// Ejecuta la chain de interceptors ordenada por phase, propagando
+    /// mutaciones via `.transform(ctx)` entre iteraciones.
     ///
-    /// Nota: `.pause` y `.transform` todavía no se propagan de vuelta al pipeline
-    /// legacy — por ahora la chain sólo puede cortar con shortCircuit. Las otras
-    /// variantes se implementarán feature-por-feature cuando migren.
+    /// Orden de phases: `.gate` (0) → `.resolve` (1) → `.transform` (2) → `.network` (3).
+    /// Un interceptor en `.transform` ve el ctx mutado por `.gate` y `.resolve`
+    /// (si alguno transformó, cosa rara pero permitida).
+    ///
+    /// Retorna el outcome + el `RequestContext` final (con mutaciones acumuladas).
+    /// Si algún interceptor cortó con shortCircuit, el ctx reportado es el que
+    /// tenía al momento del corte (sin incluir transforms de interceptors posteriores).
     private func executeChainAsync(
         ctx: RequestContext,
         registry: InterceptorRegistry,
         eventLoop: EventLoop
-    ) -> EventLoopFuture<Response?> {
-        let promise = eventLoop.makePromise(of: Response?.self)
+    ) -> EventLoopFuture<(ChainOutcome, RequestContext)> {
+        let promise = eventLoop.makePromise(of: (ChainOutcome, RequestContext).self)
         Task {
             let chain = await registry.chain()
+            var current = ctx
             for interceptor in chain {
-                let result = await interceptor.intercept(ctx)
+                let result = await interceptor.intercept(current)
                 switch result {
-                case .pass, .transform:
+                case .pass:
                     continue
+                case .transform(let newCtx):
+                    current = newCtx
                 case .shortCircuit(let response):
-                    promise.succeed(response)
+                    promise.succeed((.shortCircuit(response), current))
                     return
                 case .pause:
                     // TODO: soporte de breakpoint/pause requiere wiring con UI.
@@ -371,9 +400,34 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
                     continue
                 }
             }
-            promise.succeed(nil)
+            promise.succeed((.pass, current))
         }
         return promise.futureResult
+    }
+
+    /// Reconstruye un `HTTPRequestHead` aplicando las mutaciones del `RequestContext`.
+    /// Usado después de que la chain pasa para que el forward al servidor vaya
+    /// al host mutado con los headers mutados.
+    private func applyContextToHead(_ head: HTTPRequestHead, ctx: RequestContext) -> HTTPRequestHead {
+        var mutated = head
+        if ctx.path != head.uri {
+            mutated.uri = ctx.path
+        }
+        // Reconstruir HTTPHeaders desde el dict del ctx — preserva orden del dict.
+        var newHeaders = HTTPHeaders()
+        for (name, value) in ctx.headers {
+            newHeaders.add(name: name, value: value)
+        }
+        // Si el host cambió, actualizar el header Host también
+        if ctx.host != extractHostFromHeaders(head.headers) {
+            newHeaders.replaceOrAdd(name: "Host", value: ctx.host)
+        }
+        mutated.headers = newHeaders
+        return mutated
+    }
+
+    private func extractHostFromHeaders(_ headers: HTTPHeaders) -> String {
+        headers["Host"].first?.split(separator: ":").first.map(String.init) ?? ""
     }
 
     /// Escribe un `Response` value-type al canal NIO — usado cuando la chain corta

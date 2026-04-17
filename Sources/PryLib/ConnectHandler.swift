@@ -308,9 +308,23 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
             let ctx = buildRequestContext(head: head, host: host, port: port, path: path)
             executeChainAsync(ctx: ctx, registry: registry, eventLoop: context.eventLoop).whenComplete { result in
                 switch result {
-                case .success(.some(let response)):
+                case .success((.shortCircuit(let response), _)):
                     self.writeChainResponse(response, context: context)
-                case .success(.none), .failure:
+                case .success((.pass, let finalCtx)):
+                    // Aplicamos mutaciones del ctx (path + headers) al head. Nota: el
+                    // host NO se puede cambiar en HTTPS porque el tunnel TLS ya está
+                    // establecido al host original. Cualquier mutación de ctx.host se
+                    // ignora acá (se loguea warning). MapRemote a nivel HTTPS
+                    // requiere intervenir en ConnectHandler ANTES del tunnel.
+                    if finalCtx.host != self.host {
+                        OutputBroker.shared.log(
+                            errText("⚠️  chain tried to change host on established HTTPS tunnel — ignored"),
+                            type: .info
+                        )
+                    }
+                    let mutatedHead = self.applyContextToHead(head, ctx: finalCtx)
+                    self.handleDecryptedRequestLegacy(context: context, head: mutatedHead, body: body)
+                case .failure:
                     self.handleDecryptedRequestLegacy(context: context, head: head, body: body)
                 }
             }
@@ -589,29 +603,53 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
         )
     }
 
+    /// Resultado de la chain — simétrico al de HTTPInterceptor.
+    enum ChainOutcome {
+        case shortCircuit(Response)
+        case pass
+    }
+
     private func executeChainAsync(
         ctx: RequestContext,
         registry: InterceptorRegistry,
         eventLoop: EventLoop
-    ) -> EventLoopFuture<Response?> {
-        let promise = eventLoop.makePromise(of: Response?.self)
+    ) -> EventLoopFuture<(ChainOutcome, RequestContext)> {
+        let promise = eventLoop.makePromise(of: (ChainOutcome, RequestContext).self)
         Task {
             let chain = await registry.chain()
+            var current = ctx
             for interceptor in chain {
-                let result = await interceptor.intercept(ctx)
+                let result = await interceptor.intercept(current)
                 switch result {
-                case .pass, .transform:
+                case .pass:
                     continue
+                case .transform(let newCtx):
+                    current = newCtx
                 case .shortCircuit(let response):
-                    promise.succeed(response)
+                    promise.succeed((.shortCircuit(response), current))
                     return
                 case .pause:
                     continue // TODO: wiring con UI para breakpoints
                 }
             }
-            promise.succeed(nil)
+            promise.succeed((.pass, current))
         }
         return promise.futureResult
+    }
+
+    /// Aplica mutaciones del ctx final al head. Para HTTPS: el host no se puede
+    /// cambiar (tunnel TLS ya establecido), solo path + headers.
+    private func applyContextToHead(_ head: HTTPRequestHead, ctx: RequestContext) -> HTTPRequestHead {
+        var mutated = head
+        if ctx.path != head.uri {
+            mutated.uri = ctx.path
+        }
+        var newHeaders = HTTPHeaders()
+        for (name, value) in ctx.headers {
+            newHeaders.add(name: name, value: value)
+        }
+        mutated.headers = newHeaders
+        return mutated
     }
 
     private func writeChainResponse(_ response: Response, context: ChannelHandlerContext) {
