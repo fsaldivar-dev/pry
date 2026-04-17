@@ -53,8 +53,9 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
                 case .success((.pass, let finalCtx)):
                     // Chain pasó limpia (posiblemente mutando ctx). Aplicamos las
                     // mutaciones al head + usamos el host/port del ctx final al
-                    // forwardear — esto hace que MapRemote (cambia host),
-                    // HeaderRewrite (cambia headers), etc. afecten el request real.
+                    // forwardear. `chainCovers: true` → skipea los checks que ya
+                    // ejecutó la chain (Block, MapLocal, HeaderRewrite, MapRemote,
+                    // DNSSpoofing).
                     let mutatedHead = self.applyContextToHead(head, ctx: finalCtx)
                     self.handleLegacy(
                         context: context,
@@ -62,24 +63,36 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
                         host: finalCtx.host,
                         port: finalCtx.port,
                         path: finalCtx.path,
-                        body: body
+                        body: body,
+                        chainCovers: true
                     )
                 case .failure:
-                    // Error ejecutando la chain → fallback al flow legacy sin mutaciones.
-                    self.handleLegacy(context: context, head: head, host: host, port: port, path: path, body: body)
+                    // Error ejecutando la chain → fallback al flow legacy completo.
+                    self.handleLegacy(context: context, head: head, host: host, port: port, path: path, body: body, chainCovers: false)
                 }
             }
             return
         }
 
-        // Fallback sin chain (ej. CLI sin inyectar interceptors): flow legacy directo.
-        handleLegacy(context: context, head: head, host: host, port: port, path: path, body: body)
+        // Fallback sin chain (ej. CLI sin inyectar interceptors): flow legacy completo.
+        handleLegacy(context: context, head: head, host: host, port: port, path: path, body: body, chainCovers: false)
     }
 
-    private func handleLegacy(context: ChannelHandlerContext, head: HTTPRequestHead, host: String, port: Int, path: String, body: ByteBuffer?) {
-        // Block list check (legacy — sigue activo para compatibilidad con CLI/TUI
-        // y como safety net mientras se migran features al nuevo patrón).
-        if BlockList.isBlocked(host) {
+    /// - Parameter chainCovers: si `true`, la chain nueva ya ejecutó Block /
+    ///   MapLocal / HeaderRewrite / MapRemote / DNSSpoofing. Saltearlos acá
+    ///   para no duplicar trabajo. Si `false` (CLI o fallback), correrlos
+    ///   como antes.
+    private func handleLegacy(
+        context: ChannelHandlerContext,
+        head: HTTPRequestHead,
+        host: String,
+        port: Int,
+        path: String,
+        body: ByteBuffer?,
+        chainCovers: Bool
+    ) {
+        // Block list check — cubierto por BlockInterceptor cuando chain corrió.
+        if !chainCovers, BlockList.isBlocked(host) {
             OutputBroker.shared.log(errText("🚫 BLOCKED \(host)"), type: .error)
             var headers = HTTPHeaders()
             headers.add(name: "Content-Type", value: "application/json")
@@ -182,17 +195,19 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
             }
         }
 
-        // Map Local check (regex → local file)
-        if let fileContent = MapLocal.matchContent(url: path) {
+        // Map Local check — cubierto por MapLocalInterceptor cuando chain corrió.
+        if !chainCovers, let fileContent = MapLocal.matchContent(url: path) {
             let mapMock = UnifiedMock(pattern: path, body: fileContent, source: .loose)
             respondWithUnifiedMock(context: context, mock: mapMock, path: path, host: host, requestId: requestId)
             return
         }
 
-        // Apply header rewrites before forwarding
+        // Header rewrites — cubierto por HeaderRulesInterceptor cuando chain corrió.
         var rewrittenHead = head
-        let rewrittenHeaders = HeaderRewrite.apply(to: head.headers.map { ($0.name, $0.value) })
-        rewrittenHead.headers = .init(rewrittenHeaders.map { (name: $0.0, value: $0.1) })
+        if !chainCovers {
+            let rewrittenHeaders = HeaderRewrite.apply(to: head.headers.map { ($0.name, $0.value) })
+            rewrittenHead.headers = .init(rewrittenHeaders.map { (name: $0.0, value: $0.1) })
+        }
 
         // Rule Engine: apply scripting rules
         let matchingRules = RuleEngine.matchingRules(for: head.uri, method: "\(head.method)")
@@ -214,15 +229,16 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
             rewrittenHead.headers.remove(name: "If-Modified-Since")
         }
 
-        // Map Remote: redirect to different host
+        // Map Remote — cubierto por HostRedirectInterceptor (mutó ctx.host, que ya
+        // se reflejó en `host` cuando chainCovers es true). Solo corre legacy si no.
         var connectHost = host
-        if let remapped = MapRemote.match(host: host) {
+        if !chainCovers, let remapped = MapRemote.match(host: host) {
             connectHost = remapped
             OutputBroker.shared.log(info(">>> REDIRECT \(host) → \(remapped)"), type: .info)
         }
 
-        // DNS Spoofing: override IP resolution
-        if let spoofedIP = DNSSpoofing.resolve(connectHost) {
+        // DNS Spoofing — cubierto por DNSOverrideInterceptor cuando chain corrió.
+        if !chainCovers, let spoofedIP = DNSSpoofing.resolve(connectHost) {
             connectHost = spoofedIP
         }
 
