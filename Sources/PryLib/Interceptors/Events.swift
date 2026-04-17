@@ -161,3 +161,16 @@ public struct DNSOverridesChangedEvent: PryEvent {
         self.changedAt = changedAt
     }
 }
+
+/// Emitido cuando cambia el estado de grabación (start/stop) o la lista
+/// de grabaciones guardadas (delete, toMocks).
+public struct RecordingsChangedEvent: PryEvent {
+    public let names: [String]
+    public let isRecording: Bool
+    public let changedAt: Date
+    public init(names: [String], isRecording: Bool, changedAt: Date = Date()) {
+        self.names = names
+        self.isRecording = isRecording
+        self.changedAt = changedAt
+    }
+}
