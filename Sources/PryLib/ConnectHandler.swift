@@ -314,8 +314,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                     // Aplicamos mutaciones del ctx (path + headers) al head. Nota: el
                     // host NO se puede cambiar en HTTPS porque el tunnel TLS ya está
                     // establecido al host original. Cualquier mutación de ctx.host se
-                    // ignora acá (se loguea warning). MapRemote a nivel HTTPS
-                    // requiere intervenir en ConnectHandler ANTES del tunnel.
+                    // ignora acá (se loguea warning).
                     if finalCtx.host != self.host {
                         OutputBroker.shared.log(
                             errText("⚠️  chain tried to change host on established HTTPS tunnel — ignored"),
@@ -323,17 +322,20 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                         )
                     }
                     let mutatedHead = self.applyContextToHead(head, ctx: finalCtx)
-                    self.handleDecryptedRequestLegacy(context: context, head: mutatedHead, body: body)
+                    self.handleDecryptedRequestLegacy(context: context, head: mutatedHead, body: body, chainCovers: true)
                 case .failure:
-                    self.handleDecryptedRequestLegacy(context: context, head: head, body: body)
+                    self.handleDecryptedRequestLegacy(context: context, head: head, body: body, chainCovers: false)
                 }
             }
             return
         }
-        handleDecryptedRequestLegacy(context: context, head: head, body: body)
+        handleDecryptedRequestLegacy(context: context, head: head, body: body, chainCovers: false)
     }
 
-    private func handleDecryptedRequestLegacy(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?) {
+    /// - Parameter chainCovers: si `true`, la chain nueva ya ejecutó HeaderRules /
+    ///   MapRemote / DNSSpoofing (el resto no aplica en HTTPS — gate/resolve ya
+    ///   cortaron antes del tunnel si procedía). Saltearlos acá.
+    private func handleDecryptedRequestLegacy(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?, chainCovers: Bool) {
         let logEntry = "\(head.method) https://\(host)\(head.uri)"
         let requestId = BodyPrinter.printRequestHead(head, host: host, port: port)
         BodyPrinter.printRequestBody(body, requestId: requestId)
@@ -381,7 +383,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
             future.whenSuccess { [self] action in
                 switch action {
                 case .resume:
-                    self.continueRequest(context: context, head: head, body: body, requestId: requestId)
+                    self.continueRequest(context: context, head: head, body: body, requestId: requestId, chainCovers: chainCovers)
                 case .modify(let newHeaders, let newBody):
                     var modifiedHead = head
                     if let headers = newHeaders {
@@ -395,7 +397,7 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
                         buf.writeString(bodyStr)
                         modifiedBody = buf
                     }
-                    self.continueRequest(context: context, head: modifiedHead, body: modifiedBody, requestId: requestId)
+                    self.continueRequest(context: context, head: modifiedHead, body: modifiedBody, requestId: requestId, chainCovers: chainCovers)
                 case .cancel:
                     context.close(promise: nil)
                 }
@@ -403,10 +405,10 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
             return
         }
 
-        continueRequest(context: context, head: head, body: body, requestId: requestId)
+        continueRequest(context: context, head: head, body: body, requestId: requestId, chainCovers: chainCovers)
     }
 
-    private func continueRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int) {
+    private func continueRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?, requestId: Int, chainCovers: Bool) {
         // Mock check via MockEngine (unified: covers status overrides + mocks)
         if let mock = MockEngine.shared.findMock(path: head.uri, host: host, method: "\(head.method)") {
             let sourceLabel = mock.source?.label ?? "loose"
@@ -493,13 +495,15 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
             forwardingHead.headers.remove(name: "If-Modified-Since")
         }
 
-        // Map Remote + DNS Spoofing
+        // Map Remote + DNS Spoofing — cubiertos por HostRedirect/DNSOverride
+        // interceptors cuando chain corrió. Nota para HTTPS: aunque el tunnel ya
+        // está establecido al host original, mantenemos el legacy path para CLI.
         var connectHost = self.host
-        if let remapped = MapRemote.match(host: self.host) {
+        if !chainCovers, let remapped = MapRemote.match(host: self.host) {
             connectHost = remapped
             OutputBroker.shared.log(info(">>> REDIRECT \(self.host) → \(remapped)"), type: .info)
         }
-        if let spoofedIP = DNSSpoofing.resolve(connectHost) {
+        if !chainCovers, let spoofedIP = DNSSpoofing.resolve(connectHost) {
             connectHost = spoofedIP
         }
 
