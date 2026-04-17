@@ -72,13 +72,13 @@ final class ChainTransformPropagationTests: XCTestCase {
             return .transform(new)
         }
         // `second` verifica que ve el path mutado por `first`.
-        var seenPath: String = ""
+        let seenPath = StringBox()
         let second = FakeInterceptor(phase: .network) { ctx in
-            seenPath = ctx.path
+            seenPath.set(ctx.path)
             return .pass
         }
         _ = await runChain([first, second], on: makeCtx())
-        XCTAssertEqual(seenPath, "/mutated")
+        XCTAssertEqual(seenPath.get(), "/mutated")
     }
 
     // MARK: - shortCircuit vs transform
@@ -123,7 +123,7 @@ final class ChainTransformPropagationTests: XCTestCase {
     // MARK: - phase ordering
 
     func test_phases_executeInOrder() async {
-        var calledInOrder: [Phase] = []
+        let calledInOrder = PhaseListBox()
         let network = FakeInterceptor(phase: .network) { _ in
             calledInOrder.append(.network); return .pass
         }
@@ -137,8 +137,24 @@ final class ChainTransformPropagationTests: XCTestCase {
             calledInOrder.append(.resolve); return .pass
         }
         _ = await runChain([network, gate, transform, resolve], on: makeCtx())
-        XCTAssertEqual(calledInOrder, [.gate, .resolve, .transform, .network])
+        XCTAssertEqual(calledInOrder.get(), [.gate, .resolve, .transform, .network])
     }
+}
+
+// MARK: - Sendable boxes para captures en @Sendable closures (strict concurrency)
+
+private final class StringBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = ""
+    func get() -> String { lock.withLock { value } }
+    func set(_ v: String) { lock.withLock { value = v } }
+}
+
+private final class PhaseListBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: [Phase] = []
+    func get() -> [Phase] { lock.withLock { value } }
+    func append(_ p: Phase) { lock.withLock { value.append(p) } }
 }
 
 // MARK: - test helper
