@@ -7,9 +7,15 @@ public final class ProxyServer {
     private let group: MultiThreadedEventLoopGroup
     private var channel: Channel?
     private let ca: CertificateAuthority?
+    /// Registry opcional de interceptors de la arquitectura nueva (ADR-006).
+    /// Si nil, el proxy funciona con sólo el flow legacy (BlockList.isBlocked, etc).
+    /// Cuando PryApp arranca, pasa `core.interceptors` para que la chain nueva
+    /// se ejecute antes del flow legacy.
+    public let interceptors: InterceptorRegistry?
 
-    public init(port: Int = Config.defaultPort) {
+    public init(port: Int = Config.defaultPort, interceptors: InterceptorRegistry? = nil) {
         self.port = port
+        self.interceptors = interceptors
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 
         // Try to init CA — if it fails, TLS interception disabled
@@ -26,6 +32,7 @@ public final class ProxyServer {
         let watchlist = Watchlist.load()
         let mocks = Config.loadMocks()
         let ca = self.ca
+        let interceptors = self.interceptors
 
         // Load legacy mocks from /tmp/pry.mocks into MockEngine
         for (path, body) in mocks {
@@ -42,8 +49,8 @@ public final class ProxyServer {
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes))
                     )
                     try channel.pipeline.syncOperations.addHandler(HTTPResponseEncoder())
-                    try channel.pipeline.syncOperations.addHandler(ConnectHandler(ca: ca))
-                    try channel.pipeline.syncOperations.addHandler(HTTPInterceptor(filter: filter))
+                    try channel.pipeline.syncOperations.addHandler(ConnectHandler(ca: ca, interceptors: interceptors))
+                    try channel.pipeline.syncOperations.addHandler(HTTPInterceptor(filter: filter, interceptors: interceptors))
                 }
             }
             .childChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
