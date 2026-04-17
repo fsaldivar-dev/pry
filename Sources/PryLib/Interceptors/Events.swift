@@ -102,3 +102,17 @@ public struct BlockListChangedEvent: PryEvent {
         self.changedAt = changedAt
     }
 }
+
+/// Emitido cuando la lista de status overrides cambia (add/remove/clear).
+/// Consumers: UI de otras features, métricas, futuras integraciones.
+///
+/// El payload lleva la lista actual de `(pattern, status)` — sin cuerpos ni metadata
+/// adicional — siguiendo la convención de eventos livianos del `EventBus`.
+public struct StatusOverridesChangedEvent: PryEvent {
+    public let overrides: [(String, Int)]
+    public let changedAt: Date
+    public init(overrides: [(String, Int)], changedAt: Date = Date()) {
+        self.overrides = overrides
+        self.changedAt = changedAt
+    }
+}
