@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import PryLib
 
 /// Store de dominios bloqueados. Reemplaza progresivamente a `BlockList` (PryLib legacy)
 /// en el contexto de PryApp.

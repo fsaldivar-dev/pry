@@ -9,6 +9,7 @@ struct MainWindow: View {
     @Environment(RequestStoreWrapper.self) private var store
     @Environment(BreakpointUIManager.self) private var breakpoints
     @Environment(RecorderUIManager.self) private var recorderManager
+    @Environment(AppCore.self) private var core
     @State private var showMocking = false
     @State private var showBreakpoints = false
     @State private var showRules = false
@@ -163,7 +164,9 @@ struct MainWindow: View {
         if proxy.isRunning {
             proxy.stop()
         } else {
-            do { try proxy.start() } catch { print("Failed to start proxy: \(error)") }
+            // Pasamos core.interceptors para que la chain nueva (ADR-006) corra en el
+            // pipeline real — BlockInterceptor y futuros interceptors ejecutan de verdad.
+            do { try proxy.start(interceptors: core.interceptors) } catch { print("Failed to start proxy: \(error)") }
         }
     }
 }
