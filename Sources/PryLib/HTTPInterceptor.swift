@@ -9,9 +9,11 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
     private var requestHead: HTTPRequestHead?
     private var bodyBuffer: ByteBuffer?
     private let filter: String?
+    private let interceptors: InterceptorRegistry?
 
-    init(filter: String? = nil) {
+    init(filter: String? = nil, interceptors: InterceptorRegistry? = nil) {
         self.filter = filter
+        self.interceptors = interceptors
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -36,7 +38,33 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
     private func handleRequest(context: ChannelHandlerContext, head: HTTPRequestHead, body: ByteBuffer?) {
         let (host, port, path) = extractTarget(from: head)
 
-        // Block list check
+        // Arquitectura nueva (ADR-006): ejecutar la chain de interceptors antes
+        // del flow legacy. Si algún interceptor corta con shortCircuit, respondemos
+        // con ese Response directamente. Si la chain pasa limpia, seguimos con el
+        // flow legacy abajo.
+        if let registry = interceptors {
+            let ctx = buildRequestContext(head: head, host: host, port: port, path: path)
+            let eventLoop = context.eventLoop
+            executeChainAsync(ctx: ctx, registry: registry, eventLoop: eventLoop).whenComplete { result in
+                switch result {
+                case .success(.some(let response)):
+                    // Un interceptor short-circuiteó — respondemos con eso.
+                    self.writeResponse(response, context: context, host: host)
+                case .success(.none), .failure:
+                    // Pass limpio o error ejecutando la chain → flow legacy.
+                    self.handleLegacy(context: context, head: head, host: host, port: port, path: path, body: body)
+                }
+            }
+            return
+        }
+
+        // Fallback sin chain (ej. CLI sin inyectar interceptors): flow legacy directo.
+        handleLegacy(context: context, head: head, host: host, port: port, path: path, body: body)
+    }
+
+    private func handleLegacy(context: ChannelHandlerContext, head: HTTPRequestHead, host: String, port: Int, path: String, body: ByteBuffer?) {
+        // Block list check (legacy — sigue activo para compatibilidad con CLI/TUI
+        // y como safety net mientras se migran features al nuevo patrón).
         if BlockList.isBlocked(host) {
             OutputBroker.shared.log(errText("🚫 BLOCKED \(host)"), type: .error)
             var headers = HTTPHeaders()
@@ -293,6 +321,85 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         let port = parts.count > 1 ? Int(parts[1]) ?? 80 : 80
 
         return (host, port, head.uri)
+    }
+
+    // MARK: - Integración de la chain nueva (ADR-006 Milestone 2)
+
+    /// Construye un `RequestContext` value-type desde el `HTTPRequestHead` de NIO.
+    /// Los interceptors trabajan sobre este type, no sobre tipos de NIO.
+    private func buildRequestContext(head: HTTPRequestHead, host: String, port: Int, path: String) -> RequestContext {
+        var headers: [String: String] = [:]
+        for (name, value) in head.headers {
+            headers[name] = value
+        }
+        return RequestContext(
+            method: "\(head.method)",
+            host: host,
+            path: path,
+            port: port,
+            headers: headers,
+            bodyRef: nil // bodies grandes on-demand — ver ADR para detalles
+        )
+    }
+
+    /// Ejecuta la chain de interceptors ordenada por phase. Retorna el `Response` del
+    /// primer interceptor que haga `.shortCircuit`, o `nil` si la chain pasa limpia
+    /// (ie. todos los interceptors retornan `.pass` o `.transform`).
+    ///
+    /// Nota: `.pause` y `.transform` todavía no se propagan de vuelta al pipeline
+    /// legacy — por ahora la chain sólo puede cortar con shortCircuit. Las otras
+    /// variantes se implementarán feature-por-feature cuando migren.
+    private func executeChainAsync(
+        ctx: RequestContext,
+        registry: InterceptorRegistry,
+        eventLoop: EventLoop
+    ) -> EventLoopFuture<Response?> {
+        let promise = eventLoop.makePromise(of: Response?.self)
+        Task {
+            let chain = await registry.chain()
+            for interceptor in chain {
+                let result = await interceptor.intercept(ctx)
+                switch result {
+                case .pass, .transform:
+                    continue
+                case .shortCircuit(let response):
+                    promise.succeed(response)
+                    return
+                case .pause:
+                    // TODO: soporte de breakpoint/pause requiere wiring con UI.
+                    // Por ahora tratamos pause como pass para no colgar la chain.
+                    continue
+                }
+            }
+            promise.succeed(nil)
+        }
+        return promise.futureResult
+    }
+
+    /// Escribe un `Response` value-type al canal NIO — usado cuando la chain corta
+    /// con shortCircuit (ej. BlockInterceptor, MockInterceptor futuro).
+    private func writeResponse(_ response: Response, context: ChannelHandlerContext, host: String) {
+        OutputBroker.shared.log(
+            errText("🛑 \(response.status) \(host) (chain)"),
+            type: response.status >= 400 ? .error : .response
+        )
+
+        var headers = HTTPHeaders()
+        for (name, value) in response.headers {
+            headers.add(name: name, value: value)
+        }
+        headers.add(name: "Connection", value: "close")
+
+        let status = HTTPResponseStatus(statusCode: response.status)
+        let responseHead = HTTPResponseHead(version: .http1_1, status: status, headers: headers)
+        context.write(wrapOutboundOut(.head(responseHead)), promise: nil)
+
+        if let body = response.body, !body.isEmpty {
+            var buffer = context.channel.allocator.buffer(capacity: body.count)
+            buffer.writeBytes(body)
+            context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+        }
+        context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
     }
 }
 

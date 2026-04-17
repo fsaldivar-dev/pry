@@ -19,13 +19,15 @@ final class ConnectHandler: ChannelInboundHandler, RemovableChannelHandler {
 
     private var state: State = .idle
     private let ca: CertificateAuthority?
+    private let interceptors: InterceptorRegistry?
     // Stored as instance properties so all states can access them
     private var connectHost: String = ""
     private var connectPort: Int = 443
     private var shouldIntercept: Bool = false
 
-    init(ca: CertificateAuthority?) {
+    init(ca: CertificateAuthority?, interceptors: InterceptorRegistry? = nil) {
         self.ca = ca
+        self.interceptors = interceptors
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
