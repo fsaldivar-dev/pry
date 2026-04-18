@@ -68,7 +68,7 @@ final class SessionPersistenceStoreTests: XCTestCase {
             headers: [("Content-Type", "application/json")],
             body: #"{"id":42}"#, latencyMs: 123, isMock: false
         ))
-        try await Task.sleep(nanoseconds: 200_000_000)
+        await waitUntil { SessionPersistence.currentCount() >= 1 }
         store.refreshStats()
 
         XCTAssertEqual(store.persistedCount, 1)
@@ -112,11 +112,24 @@ final class SessionPersistenceStoreTests: XCTestCase {
             requestID: 1, status: 200, headers: [],
             body: nil, latencyMs: 0, isMock: false
         ))
-        try await Task.sleep(nanoseconds: 200_000_000)
+        await waitUntil { SessionPersistence.currentCount() >= 1 }
         store.refreshStats()
         XCTAssertGreaterThan(store.persistedCount, 0)
 
         store.clearPersisted()
         XCTAssertEqual(store.persistedCount, 0)
+    }
+
+    // MARK: - Helpers
+
+    /// Poll con timeout hasta que una condición sea true. Reemplaza sleeps fijos
+    /// que son flaky en CI con load alta.
+    @MainActor
+    fileprivate func waitUntil(timeout: TimeInterval = 3.0, _ condition: () -> Bool) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
     }
 }
