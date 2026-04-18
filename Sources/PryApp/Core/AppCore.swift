@@ -58,6 +58,10 @@ public final class AppCore {
     /// como `.pryrecording` en disco. No muta el flow — es observer puro.
     public let recordings: RecordingsStore
 
+    /// Feature Session Persistence (observer, issue #91): opt-in toggle que
+    /// persiste requests/responses a disco para sobrevivir reinicios de la app.
+    public let sessionPersistence: SessionPersistenceStore
+
     public init() {
         let bus = EventBus()
         self.bus = bus
@@ -74,6 +78,7 @@ public final class AppCore {
         self.headerRules = HeaderRulesStore(storagePath: StoragePaths.headersFile, bus: bus)
         self.dnsOverrides = DNSOverridesStore(storagePath: StoragePaths.dnsFile, bus: bus)
         self.recordings = RecordingsStore(bus: bus)
+        self.sessionPersistence = SessionPersistenceStore(bus: bus)
 
         // Registrar interceptors en la chain. Orden dentro de phase no importa —
         // la chain los corre sorted por `phase.rawValue`.
