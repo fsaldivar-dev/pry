@@ -33,6 +33,8 @@ public enum StoragePaths {
     public static var recordingsDir: String { "\(root)/recordings" }
     public static var mockingDir: String { "\(root)/mocking" }
     public static var caDir: String { "\(root)/ca" }
+    public static var sessionsDir: String { "\(root)/sessions" }
+    public static var sessionFile: String { "\(sessionsDir)/last.jsonl" }
 
     // MARK: - Active state
 

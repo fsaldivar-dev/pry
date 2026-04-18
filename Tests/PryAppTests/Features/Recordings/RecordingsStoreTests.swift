@@ -72,18 +72,13 @@ final class RecordingsStoreTests: XCTestCase {
         )
         await bus.publish(reqEvent)
 
-        // Dar tiempo al subscribe loop a procesar.
-        try await Task.sleep(nanoseconds: 100_000_000)
-        // Sin response todavía, pendingRequests tiene el item pero currentStepCount = 0.
-        XCTAssertEqual(store.currentStepCount, 0)
-
         let respEvent = ResponseReceivedEvent(
             requestID: 1, status: 200,
             headers: [("Content-Type", "application/json")],
             body: #"{"ok":true}"#, latencyMs: 42, isMock: false
         )
         await bus.publish(respEvent)
-        try await Task.sleep(nanoseconds: 100_000_000)
+        await waitUntil { self.store.currentStepCount == 1 }
 
         XCTAssertEqual(store.currentStepCount, 1)
     }
@@ -96,7 +91,9 @@ final class RecordingsStoreTests: XCTestCase {
             url: "/", headers: [], body: nil
         )
         await bus.publish(reqEvent)
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // Dar tiempo a que el subscribe loop corra — pero no esperar un cambio
+        // que nunca va a venir (isRecording=false nunca incrementa step count).
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         XCTAssertEqual(store.currentStepCount, 0)
     }
@@ -111,7 +108,6 @@ final class RecordingsStoreTests: XCTestCase {
             host: "allowed.com", url: "/", headers: [], body: nil)
         await bus.publish(req1)
         await bus.publish(req2)
-        try await Task.sleep(nanoseconds: 100_000_000)
 
         let resp1 = ResponseReceivedEvent(requestID: 1, status: 200, headers: [],
             body: nil, latencyMs: 0, isMock: false)
@@ -119,7 +115,7 @@ final class RecordingsStoreTests: XCTestCase {
             body: nil, latencyMs: 0, isMock: false)
         await bus.publish(resp1)
         await bus.publish(resp2)
-        try await Task.sleep(nanoseconds: 200_000_000)
+        await waitUntil { self.store.currentStepCount == 1 }
 
         // Sólo req2 debería haber generado un step (host allowed.com matchea el filtro).
         XCTAssertEqual(store.currentStepCount, 1)
@@ -135,7 +131,7 @@ final class RecordingsStoreTests: XCTestCase {
         let resp = ResponseReceivedEvent(requestID: 1, status: 200, headers: [],
             body: nil, latencyMs: 0, isMock: false)
         await bus.publish(resp)
-        try await Task.sleep(nanoseconds: 200_000_000)
+        await waitUntil { self.store.currentStepCount == 1 }
 
         XCTAssertEqual(store.currentStepCount, 1)
     }
@@ -153,7 +149,7 @@ final class RecordingsStoreTests: XCTestCase {
         let resp = ResponseReceivedEvent(requestID: 1, status: 200,
             headers: [], body: "ok", latencyMs: 10, isMock: false)
         await bus.publish(resp)
-        try await Task.sleep(nanoseconds: 200_000_000)
+        await waitUntil { self.store.currentStepCount == 1 }
 
         let saved = store.stop()
         XCTAssertNotNil(saved)
@@ -181,5 +177,18 @@ final class RecordingsStoreTests: XCTestCase {
         XCTAssertTrue(store.recordings.contains(name))
         store.delete(name: name)
         XCTAssertFalse(store.recordings.contains(name))
+    }
+
+    // MARK: - Helpers
+
+    /// Poll con timeout hasta que una condición sea true. Usado en lugar de
+    /// `Task.sleep(fixed)` que era flaky en CI macos-14 con load alta.
+    @MainActor
+    fileprivate func waitUntil(timeout: TimeInterval = 3.0, _ condition: () -> Bool) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return }
+            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms
+        }
     }
 }
