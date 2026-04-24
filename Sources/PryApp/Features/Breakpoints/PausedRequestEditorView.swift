@@ -1,11 +1,34 @@
 import SwiftUI
-import PryKit
-import PryLib
 
+/// Banner rojo que aparece cuando hay una request pausada activa.
+@available(macOS 14, *)
+struct PausedRequestBanner: View {
+    let method: String
+    let url: String
+
+    var body: some View {
+        HStack {
+            Image(systemName: "pause.circle.fill")
+            Text("REQUEST PAUSED")
+                .fontWeight(.bold)
+            Text("— \(method) \(url)")
+                .lineLimit(1)
+            Spacer()
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.red)
+    }
+}
+
+/// Editor modal para una `PausedRequest`. El usuario puede editar headers/body
+/// y elegir entre resume / modify / cancel. La acción se envía al
+/// `BreakpointStore` que resuelve la continuation subyacente y destraba el chain.
 @available(macOS 14, *)
 @MainActor
-struct BreakpointEditorView: View {
-    @Environment(BreakpointUIManager.self) private var breakpoints
+struct PausedRequestEditorView: View {
+    @Environment(AppCore.self) private var core
     let pausedRequest: PausedRequest
 
     @State private var editedHeaders: [(String, String)]
@@ -56,8 +79,7 @@ struct BreakpointEditorView: View {
 
                 // Right: preview
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Preview")
-                        .font(.headline)
+                    Text("Preview").font(.headline)
 
                     GroupBox("Request") {
                         VStack(alignment: .leading, spacing: 4) {
@@ -101,20 +123,19 @@ struct BreakpointEditorView: View {
 
             Divider()
 
-            // Action buttons
             HStack {
                 Button("Cancel Request", role: .destructive) {
-                    breakpoints.resume(id: pausedRequest.id, action: .cancel)
+                    core.breakpoints.resolve(id: pausedRequest.id, action: .cancel)
                 }
 
                 Spacer()
 
                 Button("Resume Original") {
-                    breakpoints.resume(id: pausedRequest.id, action: .resume)
+                    core.breakpoints.resolve(id: pausedRequest.id, action: .resume)
                 }
 
                 Button("Send Modified") {
-                    breakpoints.resume(id: pausedRequest.id, action: .modify(
+                    core.breakpoints.resolve(id: pausedRequest.id, action: .modify(
                         headers: editedHeaders,
                         body: editedBody.isEmpty ? nil : editedBody
                     ))
@@ -144,5 +165,22 @@ struct BreakpointEditorView: View {
                 }
             }
         )
+    }
+}
+
+@available(macOS 14, *)
+struct PausedRequestEditorView_Previews: PreviewProvider {
+    static var previews: some View {
+        PausedRequestEditorView(pausedRequest: PausedRequest(
+            id: UUID(),
+            method: "POST",
+            url: "/api/login",
+            host: "api.myapp.com",
+            headers: [("Content-Type", "application/json"), ("Authorization", "Bearer xxx")],
+            body: "{\"username\":\"test\"}",
+            timestamp: Date()
+        ))
+        .environment(AppCore.preview())
+        .frame(width: 800, height: 500)
     }
 }

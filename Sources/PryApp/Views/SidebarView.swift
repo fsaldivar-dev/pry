@@ -19,7 +19,7 @@ private struct AppIcon {
 struct SidebarView: View {
     @Environment(RequestStoreWrapper.self) private var store
     @Environment(MockManager.self) private var mocks
-    @Environment(BreakpointUIManager.self) private var breakpoints
+    @Environment(AppCore.self) private var core
     @State private var grouped: [AppGroup] = []
     @State private var hoveredCard: String?
 
@@ -249,7 +249,7 @@ struct SidebarView: View {
     @ViewBuilder
     private var activeConfigSection: some View {
         let mockCount = MockEngine.shared.count
-        let bpCount = breakpoints.patterns.count
+        let bpCount = core.breakpoints.patterns.count
         let activeProject = ProjectManager.activeProject()
         let activeScenario = ProjectManager.activeScenario()
         let hasAnyConfig = activeScenario != nil || mockCount > 0 || bpCount > 0

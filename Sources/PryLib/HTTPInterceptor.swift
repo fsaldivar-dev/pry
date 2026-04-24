@@ -161,8 +161,8 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
             }
         }
 
-        // Breakpoint check
-        if BreakpointStore.shared.shouldBreak(url: head.uri, host: host) {
+        // Breakpoint check — cubierto por BreakpointInterceptor cuando chain corrió.
+        if !chainCovers, BreakpointStore.shared.shouldBreak(url: head.uri, host: host) {
             RequestStore.shared.updateResponse(id: requestId, statusCode: 0, headers: [], body: "⏸️ Paused at breakpoint")
             let future = RequestBreakpointManager.shared.pause(id: requestId, head: head, body: body, host: host, eventLoop: context.eventLoop)
             future.whenSuccess { [self] action in
@@ -415,11 +415,20 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
         eventLoop: EventLoop
     ) -> EventLoopFuture<(ChainOutcome, RequestContext)> {
         let promise = eventLoop.makePromise(of: (ChainOutcome, RequestContext).self)
-        Task {
+        Task { [eventBus] in
             let chain = await registry.chain()
             var current = ctx
             for interceptor in chain {
-                let result = await interceptor.intercept(current)
+                var result = await interceptor.intercept(current)
+                // Desenrollar `.pause` encadenando el `InterceptResult` que
+                // retorne la resolution. Emite RequestPausedEvent antes de
+                // awaitear para que la UI reaccione.
+                while case .pause(let resolution) = result {
+                    if let bus = eventBus {
+                        await bus.publish(RequestPausedEvent(requestID: current.id))
+                    }
+                    result = await resolution()
+                }
                 switch result {
                 case .pass:
                     continue
@@ -429,9 +438,7 @@ final class HTTPInterceptor: ChannelInboundHandler, RemovableChannelHandler, @un
                     promise.succeed((.shortCircuit(response), current))
                     return
                 case .pause:
-                    // TODO: soporte de breakpoint/pause requiere wiring con UI.
-                    // Por ahora tratamos pause como pass para no colgar la chain.
-                    continue
+                    continue // inalcanzable — el while de arriba ya desenrolló.
                 }
             }
             promise.succeed((.pass, current))
