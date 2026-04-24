@@ -5,12 +5,12 @@ import PryLib
 @available(macOS 14, *)
 struct RequestDetailView: View {
     @Environment(RequestStoreWrapper.self) private var store
-    @Environment(BreakpointUIManager.self) private var breakpoints
+    @Environment(AppCore.self) private var core
 
     var body: some View {
         // If there's a paused request, show the editor
-        if let paused = breakpoints.pausedRequests.first {
-            BreakpointEditorView(pausedRequest: paused)
+        if let paused = core.breakpoints.pausedRequests.first {
+            PausedRequestEditorView(pausedRequest: paused)
         } else if let request = store.selectedRequest {
             TabView {
                 HeadersTabView(request: request)
