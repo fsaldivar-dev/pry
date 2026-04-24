@@ -1,11 +1,12 @@
 import SwiftUI
-import PryKit
 
+/// UI para gestionar patterns de breakpoints. Consume `BreakpointStore` via
+/// `AppCore` inyectado en `@Environment`.
 @available(macOS 14, *)
 @MainActor
-struct BreakpointListView: View {
+struct BreakpointsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(BreakpointUIManager.self) private var breakpoints
+    @Environment(AppCore.self) private var core
     @State private var newPattern: String = ""
 
     var body: some View {
@@ -14,10 +15,8 @@ struct BreakpointListView: View {
                 Text("Breakpoints")
                     .font(.headline)
                 Spacer()
-                if !breakpoints.patterns.isEmpty {
-                    Button {
-                        breakpoints.clearAll()
-                    } label: {
+                if !core.breakpoints.patterns.isEmpty {
+                    Button { core.breakpoints.clearAll() } label: {
                         Image(systemName: "trash")
                     }
                     .help("Clear All")
@@ -30,7 +29,6 @@ struct BreakpointListView: View {
 
             Divider()
 
-            // Add pattern field
             HStack {
                 TextField("URL pattern (e.g. */api/*)", text: $newPattern)
                     .textFieldStyle(.roundedBorder)
@@ -44,7 +42,7 @@ struct BreakpointListView: View {
 
             Divider()
 
-            if breakpoints.patterns.isEmpty {
+            if core.breakpoints.patterns.isEmpty {
                 ContentUnavailableView(
                     "No Breakpoints",
                     systemImage: "pause.circle",
@@ -52,7 +50,7 @@ struct BreakpointListView: View {
                 )
             } else {
                 List {
-                    ForEach(breakpoints.patterns, id: \.self) { pattern in
+                    ForEach(core.breakpoints.patterns, id: \.self) { pattern in
                         HStack {
                             Image(systemName: "pause.circle")
                                 .foregroundStyle(.orange)
@@ -60,7 +58,7 @@ struct BreakpointListView: View {
                                 .font(.system(size: 12, design: .monospaced))
                             Spacer()
                             Button {
-                                breakpoints.remove(pattern)
+                                core.breakpoints.remove(pattern)
                             } label: {
                                 Image(systemName: "xmark.circle")
                                     .foregroundStyle(.secondary)
@@ -72,17 +70,16 @@ struct BreakpointListView: View {
                 .listStyle(.inset)
             }
 
-            // Paused requests count
-            if !breakpoints.pausedRequests.isEmpty {
+            if !core.breakpoints.pausedRequests.isEmpty {
                 Divider()
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text("\(breakpoints.pausedRequests.count) request(s) paused")
+                    Text("\(core.breakpoints.pausedRequests.count) request(s) paused")
                         .font(.caption)
                     Spacer()
                     Button("Resume All") {
-                        breakpoints.resumeAll()
+                        core.breakpoints.resolveAll(action: .resume)
                     }
                     .font(.caption)
                 }
@@ -96,7 +93,16 @@ struct BreakpointListView: View {
     private func addPattern() {
         let pattern = newPattern.trimmingCharacters(in: .whitespaces)
         guard !pattern.isEmpty else { return }
-        breakpoints.add(pattern)
+        core.breakpoints.add(pattern)
         newPattern = ""
+    }
+}
+
+@available(macOS 14, *)
+struct BreakpointsView_Previews: PreviewProvider {
+    static var previews: some View {
+        BreakpointsView()
+            .environment(AppCore.preview())
+            .frame(width: 500, height: 400)
     }
 }

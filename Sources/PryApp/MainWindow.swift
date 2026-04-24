@@ -7,7 +7,6 @@ import PryLib
 struct MainWindow: View {
     @Environment(ProxyManager.self) private var proxy
     @Environment(RequestStoreWrapper.self) private var store
-    @Environment(BreakpointUIManager.self) private var breakpoints
     @Environment(RecorderUIManager.self) private var recorderManager
     @Environment(AppCore.self) private var core
     @State private var showMocking = false
@@ -28,7 +27,7 @@ struct MainWindow: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let paused = breakpoints.pausedRequests.first {
+            if let paused = core.breakpoints.pausedRequests.first {
                 PausedRequestBanner(method: paused.method, url: paused.url)
             }
 
@@ -208,7 +207,7 @@ struct MainWindow: View {
             SessionPersistenceView().dismissibleSheet().frame(minWidth: 500, minHeight: 420)
         }
         .sheet(isPresented: $showBreakpoints) {
-            BreakpointListView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
+            BreakpointsView().dismissibleSheet().frame(minWidth: 500, minHeight: 400)
         }
         .sheet(isPresented: $showRules) {
             RulesEditorView().dismissibleSheet().frame(minWidth: 600, minHeight: 500)

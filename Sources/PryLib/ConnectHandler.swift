@@ -396,8 +396,8 @@ final class TLSForwarder: ChannelInboundHandler, @unchecked Sendable {
             return
         }
 
-        // Breakpoint check
-        if BreakpointStore.shared.shouldBreak(url: head.uri, host: host) {
+        // Breakpoint check — cubierto por BreakpointInterceptor cuando chain corrió.
+        if !chainCovers, BreakpointStore.shared.shouldBreak(url: head.uri, host: host) {
             RequestStore.shared.updateResponse(id: requestId, statusCode: 0, headers: [], body: "⏸️ Paused at breakpoint")
             let future = RequestBreakpointManager.shared.pause(id: requestId, head: head, body: body, host: host, eventLoop: eventLoop)
             future.whenSuccess { [self] action in

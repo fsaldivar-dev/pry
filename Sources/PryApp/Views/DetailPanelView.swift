@@ -7,7 +7,7 @@ import PryLib
 @available(macOS 14, *)
 public struct DetailPanelView: View {
     @Environment(RequestStoreWrapper.self) private var store
-    @Environment(BreakpointUIManager.self) private var breakpoints
+    @Environment(AppCore.self) private var core
 
     public enum Tab: String, CaseIterable {
         case headers  = "Headers"
@@ -24,8 +24,8 @@ public struct DetailPanelView: View {
     public init() { }
 
     public var body: some View {
-        if let paused = breakpoints.pausedRequests.first {
-            BreakpointEditorView(pausedRequest: paused)
+        if let paused = core.breakpoints.pausedRequests.first {
+            PausedRequestEditorView(pausedRequest: paused)
         } else if let request = store.selectedRequest {
             VStack(spacing: 0) {
                 // Segmented picker bar with Copy cURL

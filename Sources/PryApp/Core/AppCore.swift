@@ -62,6 +62,11 @@ public final class AppCore {
     /// persiste requests/responses a disco para sobrevivir reinicios de la app.
     public let sessionPersistence: SessionPersistenceStore
 
+    /// Feature Breakpoints (migrado a ADR-006): phase `.gate` que retorna
+    /// `.pause(resolution:)` cuando la request matchea un pattern, suspendiendo
+    /// el chain hasta que la UI resuelva con resume / modify / cancel.
+    public let breakpoints: BreakpointsStore
+
     public init() {
         let bus = EventBus()
         self.bus = bus
@@ -79,6 +84,7 @@ public final class AppCore {
         self.dnsOverrides = DNSOverridesStore(storagePath: StoragePaths.dnsFile, bus: bus)
         self.recordings = RecordingsStore(bus: bus)
         self.sessionPersistence = SessionPersistenceStore(bus: bus)
+        self.breakpoints = BreakpointsStore(storagePath: StoragePaths.breakpointsFile, bus: bus)
 
         // Registrar interceptors en la chain. Orden dentro de phase no importa —
         // la chain los corre sorted por `phase.rawValue`.
@@ -89,7 +95,9 @@ public final class AppCore {
         let hostRedirects = self.hostRedirects
         let headerRules = self.headerRules
         let dnsOverrides = self.dnsOverrides
+        let breakpoints = self.breakpoints
         Task {
+            await interceptors.register(BreakpointInterceptor(store: breakpoints))
             await interceptors.register(BlockInterceptor(store: blocks))
             await interceptors.register(StatusOverrideInterceptor(store: statusOverrides))
             await interceptors.register(MapLocalInterceptor(store: mapLocal))

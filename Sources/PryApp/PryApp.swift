@@ -11,7 +11,6 @@ struct PryApp: App {
     @State private var proxyManager = ProxyManager()
     @State private var requestStore = RequestStoreWrapper()
     @State private var mockManager = MockManager()
-    @State private var breakpointManager = BreakpointUIManager()
     @State private var recorderManager = RecorderUIManager()
     @State private var projectUIManager = ProjectUIManager()
     /// Composition root de la arquitectura nueva (ADR-006). Convive con los
@@ -25,7 +24,6 @@ struct PryApp: App {
                 .environment(proxyManager)
                 .environment(requestStore)
                 .environment(mockManager)
-                .environment(breakpointManager)
                 .environment(recorderManager)
                 .environment(projectUIManager)
                 .environment(core)
