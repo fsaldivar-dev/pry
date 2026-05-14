@@ -50,4 +50,15 @@ final class ConfigTests: XCTestCase {
         Config.clearLog()
         XCTAssertTrue(Config.readLog().isEmpty)
     }
+
+    func testNoCacheSettingOn() {
+        Config.set("nocache", value: "true")
+        XCTAssertEqual(Config.get("nocache"), "true")
+    }
+
+    func testNoCacheSettingOff() {
+        Config.set("nocache", value: "true")
+        Config.set("nocache", value: "false")
+        XCTAssertEqual(Config.get("nocache"), "false")
+    }
 }
