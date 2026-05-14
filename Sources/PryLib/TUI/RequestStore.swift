@@ -1,5 +1,23 @@
 import Foundation
 
+/// Codable wrapper for header tuples
+public struct CodableHeader: Codable {
+    public let name: String
+    public let value: String
+
+    public init(name: String, value: String) {
+        self.name = name
+        self.value = value
+    }
+
+    public init(from tuple: (String, String)) {
+        self.name = tuple.0
+        self.value = tuple.1
+    }
+
+    public var tuple: (String, String) { (name, value) }
+}
+
 /// Stores captured requests for TUI navigation
 public class RequestStore {
     public static let shared = RequestStore()
@@ -9,7 +27,7 @@ public class RequestStore {
     private let maxEntries = 500
     var onChange: (() -> Void)?
 
-    public struct CapturedRequest {
+    public struct CapturedRequest: Codable {
         public let id: Int
         public let timestamp: Date
         public let method: String
@@ -35,6 +53,58 @@ public class RequestStore {
             self.statusCode = statusCode; self.responseHeaders = responseHeaders
             self.responseBody = responseBody; self.isMock = isMock; self.isTunnel = isTunnel
             self.isPinned = isPinned
+        }
+
+        // MARK: - Codable
+
+        enum CodingKeys: String, CodingKey {
+            case id, timestamp, method, url, host, appIcon, appName
+            case requestHeaders, requestBody, statusCode
+            case responseHeaders, responseBody
+            case isMock, isTunnel, isPinned, isWebSocket
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(id, forKey: .id)
+            try container.encode(timestamp, forKey: .timestamp)
+            try container.encode(method, forKey: .method)
+            try container.encode(url, forKey: .url)
+            try container.encode(host, forKey: .host)
+            try container.encode(appIcon, forKey: .appIcon)
+            try container.encode(appName, forKey: .appName)
+            try container.encode(requestHeaders.map { CodableHeader(from: $0) }, forKey: .requestHeaders)
+            try container.encodeIfPresent(requestBody, forKey: .requestBody)
+            try container.encodeIfPresent(statusCode, forKey: .statusCode)
+            try container.encode(responseHeaders.map { CodableHeader(from: $0) }, forKey: .responseHeaders)
+            try container.encodeIfPresent(responseBody, forKey: .responseBody)
+            try container.encode(isMock, forKey: .isMock)
+            try container.encode(isTunnel, forKey: .isTunnel)
+            try container.encode(isPinned, forKey: .isPinned)
+            try container.encode(isWebSocket, forKey: .isWebSocket)
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(Int.self, forKey: .id)
+            timestamp = try container.decode(Date.self, forKey: .timestamp)
+            method = try container.decode(String.self, forKey: .method)
+            url = try container.decode(String.self, forKey: .url)
+            host = try container.decode(String.self, forKey: .host)
+            appIcon = try container.decode(String.self, forKey: .appIcon)
+            appName = try container.decode(String.self, forKey: .appName)
+            let reqHeaders = try container.decode([CodableHeader].self, forKey: .requestHeaders)
+            requestHeaders = reqHeaders.map { $0.tuple }
+            requestBody = try container.decodeIfPresent(String.self, forKey: .requestBody)
+            statusCode = try container.decodeIfPresent(UInt.self, forKey: .statusCode)
+            let respHeaders = try container.decode([CodableHeader].self, forKey: .responseHeaders)
+            responseHeaders = respHeaders.map { $0.tuple }
+            responseBody = try container.decodeIfPresent(String.self, forKey: .responseBody)
+            isMock = try container.decode(Bool.self, forKey: .isMock)
+            isTunnel = try container.decode(Bool.self, forKey: .isTunnel)
+            isPinned = try container.decode(Bool.self, forKey: .isPinned)
+            isWebSocket = try container.decode(Bool.self, forKey: .isWebSocket)
+            wsFrames = [] // wsFrames are not persisted
         }
     }
 
@@ -111,7 +181,20 @@ public class RequestStore {
     }
 
     func clear() {
-        queue.sync { entries.removeAll() }
+        queue.sync {
+            entries.removeAll()
+            nextId = 1
+        }
+        onChange?()
+    }
+
+    func loadEntries(_ newEntries: [CapturedRequest]) {
+        queue.sync {
+            entries.append(contentsOf: newEntries)
+            if let maxId = newEntries.map({ $0.id }).max() {
+                nextId = maxId + 1
+            }
+        }
         onChange?()
     }
 
