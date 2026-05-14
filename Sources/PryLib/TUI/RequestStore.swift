@@ -82,6 +82,8 @@ public class RequestStore {
         public var isWebSocket: Bool = false
         public var wsFrames: [WSFrame] = []
         public var graphqlOperation: String?
+        /// Round-trip time from request received to response complete (nil until response arrives).
+        public var duration: TimeInterval?
 
         public init(id: Int = 0, timestamp: Date = Date(), method: String, url: String, host: String, appIcon: String, appName: String, requestHeaders: [(String, String)] = [], requestBody: String? = nil, statusCode: UInt? = nil, responseHeaders: [(String, String)] = [], responseBody: String? = nil, isMock: Bool = false, isTunnel: Bool = false, isPinned: Bool = false) {
             self.id = id; self.timestamp = timestamp; self.method = method; self.url = url
@@ -148,6 +150,7 @@ public class RequestStore {
                 entries[idx].responseHeaders = headers
                 entries[idx].responseBody = body
                 entries[idx].isMock = isMock
+                entries[idx].duration = Date().timeIntervalSince(entries[idx].timestamp)
             }
         }
         onChange?()
