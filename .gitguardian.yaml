@@ -1,0 +1,5 @@
+version: 2
+# Rutas revisadas manualmente: header JWT RS256 estandar, no un secreto
+secret:
+  ignored-paths:
+    - 'Sources/Pry/CertificateAuthority.swift'

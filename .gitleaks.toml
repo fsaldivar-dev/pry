@@ -1,0 +1,10 @@
+# Allowlist de falsos positivos / valores publicos por diseno.
+# Motivo en este repo: header JWT RS256 estandar, no un secreto
+[extend]
+useDefault = true
+
+[[allowlist]]
+description = "Rutas revisadas: no contienen secretos reales (header JWT RS256 estandar, no un secreto)"
+paths = [
+  '''Sources/Pry/CertificateAuthority\.swift''',
+]
